@@ -1,15 +1,125 @@
+<script setup>
+import { computed, onMounted, watch } from 'vue'
+import { store } from '../store'
+
+let timer = null
+watch(() => [store.text, store.paper], () => {
+  clearTimeout(timer)
+  if (!store.text.trim()) {
+    store.previewUrl = ''
+    return
+  }
+  timer = setTimeout(preview, 500)          // 防抖 500ms
+})
+
+async function preview() {
+  store.previewing = true
+  store.previewError = ''
+  try {
+    const r = await fetch('/api/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: store.text, paper: store.paper }),
+    })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      const d = err.detail
+      store.previewError = typeof d === 'object'
+        ? `${d.message}：${(d.details || []).join('；')}`
+        : String(d || '预览失败')
+      store.previewUrl = ''
+    } else {
+      const data = await r.json()
+      store.previewUrl = data.image
+      store.previewError = data.warnings?.length
+        ? data.warnings.join('\n') : ''
+    }
+  } catch {
+    store.previewError = '无法连接后端'
+  } finally {
+    store.previewing = false
+  }
+}
+
+async function generate() {
+  store.jobError = ''
+  store.downloadUrl = ''
+  const r = await fetch('/api/jobs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: store.text, paper: store.paper }),
+  })
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}))
+    store.jobError = String(err.detail || '创建任务失败')
+    return
+  }
+  store.job = await r.json()
+  poll()
+}
+
+async function poll() {
+  while (store.job && store.job.status !== 'done'
+         && store.job.status !== 'failed') {
+    await new Promise(res => setTimeout(res, 800))
+    const r = await fetch(`/api/jobs/${store.job.id}`)
+    if (!r.ok) break
+    store.job = await r.json()
+  }
+  if (store.job?.status === 'done') {
+    store.downloadUrl = `/api/jobs/${store.job.id}/download`
+  } else if (store.job?.status === 'failed') {
+    store.jobError = store.job.error || '渲染失败'
+  }
+}
+
+const percent = computed(() => {
+  const j = store.job
+  if (!j) return 0
+  if (j.status === 'done') return 100
+  if (j.status === 'pdf') return 97
+  if (j.status === 'rendering' && j.total > 0) {
+    return Math.round((j.done / j.total) * 95)
+  }
+  return 4
+})
+
+const statusText = computed(() => {
+  const j = store.job
+  if (!j) return '待生成'
+  return {
+    queued: '排队中…',
+    rendering: `渲染中 第${j.done}页 / 共${j.total}页`,
+    pdf: '正在合成 PDF…',
+    done: '✅ 完成',
+    failed: '失败',
+  }[j.status] || j.status
+})
+</script>
+
 <template>
   <section class="panel preview">
-    <h2>实时预览</h2>
+    <h2>实时预览（改动后自动刷新）</h2>
     <div class="page">
-      <p class="placeholder">预览区（P0 接 /api/preview，防抖 500ms 自动刷新）</p>
+      <img v-if="store.previewUrl" :src="store.previewUrl" alt="预览" />
+      <p v-else-if="store.previewing" class="placeholder">渲染中…</p>
+      <p v-else class="placeholder">
+        在左侧输入文本，这里会显示第一页手写效果
+      </p>
     </div>
+    <p v-if="store.previewError" class="error">{{ store.previewError }}</p>
 
-    <button class="primary" disabled>生成 PDF</button>
+    <button class="primary" :disabled="!store.text.trim()
+      || (store.job && !['done', 'failed'].includes(store.job.status))"
+      @click="generate">
+      生成 PDF（共 {{ Math.max(1, Math.ceil((store.text ? store.text.split('\n').length : 0) / 25)) }} 页）
+    </button>
 
     <div class="progress">
-      <div class="bar"><div class="fill" style="width: 0%"></div></div>
-      <span class="status">待生成</span>
+      <div class="bar"><div class="fill" :style="{ width: percent + '%' }"></div></div>
+      <span class="status">{{ statusText }}</span>
+      <a v-if="store.downloadUrl" class="download" :href="store.downloadUrl">⬇ 下载 PDF</a>
     </div>
+    <p v-if="store.jobError" class="error">{{ store.jobError }}</p>
   </section>
 </template>
