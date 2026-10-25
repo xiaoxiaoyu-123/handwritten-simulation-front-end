@@ -1,9 +1,11 @@
 <script setup>
 import { computed, onMounted, watch } from 'vue'
-import { store } from '../store'
+import { loadHistory, saveHistoryEntry, store } from '../store'
+
+onMounted(loadHistory)
 
 let timer = null
-watch(() => [store.text, store.paper], () => {
+watch(() => [store.text, store.paper, store.font, store.previewNonce], () => {
   clearTimeout(timer)
   if (!store.text.trim()) {
     store.previewUrl = ''
@@ -19,7 +21,8 @@ async function preview() {
     const r = await fetch('/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: store.text, paper: store.paper }),
+      body: JSON.stringify({ text: store.text, paper: store.paper,
+                             font: store.font }),
     })
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
@@ -44,10 +47,12 @@ async function preview() {
 async function generate() {
   store.jobError = ''
   store.downloadUrl = ''
+  store.downloadPngUrl = ''
   const r = await fetch('/api/jobs', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: store.text, paper: store.paper }),
+    body: JSON.stringify({ text: store.text, paper: store.paper,
+                           font: store.font }),
   })
   if (!r.ok) {
     const err = await r.json().catch(() => ({}))
@@ -55,6 +60,7 @@ async function generate() {
     return
   }
   store.job = await r.json()
+  saveHistoryEntry()
   poll()
 }
 
@@ -68,6 +74,7 @@ async function poll() {
   }
   if (store.job?.status === 'done') {
     store.downloadUrl = `/api/jobs/${store.job.id}/download`
+    store.downloadPngUrl = `/api/jobs/${store.job.id}/download?format=png`
   } else if (store.job?.status === 'failed') {
     store.jobError = store.job.error || '渲染失败'
   }
@@ -112,13 +119,14 @@ const statusText = computed(() => {
     <button class="primary" :disabled="!store.text.trim()
       || (store.job && !['done', 'failed'].includes(store.job.status))"
       @click="generate">
-      生成 PDF（共 {{ Math.max(1, Math.ceil((store.text ? store.text.split('\n').length : 0) / 25)) }} 页）
+      生成（共 {{ Math.max(1, Math.ceil((store.text ? store.text.split('\n').length : 0) / 25)) }} 页）
     </button>
 
     <div class="progress">
       <div class="bar"><div class="fill" :style="{ width: percent + '%' }"></div></div>
       <span class="status">{{ statusText }}</span>
-      <a v-if="store.downloadUrl" class="download" :href="store.downloadUrl">⬇ 下载 PDF</a>
+      <a v-if="store.downloadUrl" class="download" :href="store.downloadUrl">⬇ PDF</a>
+      <a v-if="store.downloadPngUrl" class="download" :href="store.downloadPngUrl">⬇ PNG</a>
     </div>
     <p v-if="store.jobError" class="error">{{ store.jobError }}</p>
   </section>

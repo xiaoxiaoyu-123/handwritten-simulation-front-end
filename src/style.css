@@ -45,12 +45,40 @@ body {
 
 /* 素材栏 */
 .material label { display: flex; align-items: center; gap: 8px; padding: 6px 4px; font-size: 14px; }
+.pick { display: flex; align-items: center; }
+.pick label { flex: 1; }
+.mini { border: none; background: none; cursor: pointer; opacity: 0.45; font-size: 13px; }
+.mini:hover { opacity: 1; }
+.upload {
+  display: block; width: 100%; margin-top: 8px; padding: 7px; font-size: 13px;
+  border: 1px dashed var(--line); background: none; border-radius: 8px;
+  color: var(--muted); text-align: center; cursor: pointer;
+}
+.upload:hover { border-color: var(--accent); color: var(--accent); }
+.upload.busy { pointer-events: none; opacity: 0.6; }
 .ghost {
   width: 100%; margin-top: 8px; padding: 7px; font-size: 13px;
   border: 1px dashed var(--line); background: none; border-radius: 8px; color: var(--muted);
 }
 .params label { display: block; font-size: 13px; margin: 10px 0; }
 .params input[type="range"] { width: 100%; }
+.hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+/* 校准 */
+.calib { margin-top: 6px; }
+.calib-form { padding: 8px 4px; }
+.calib-form label { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; margin: 8px 0; }
+.calib-form input { width: 90px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; }
+.primary.small { padding: 7px; font-size: 13px; width: 100%; border: none; border-radius: 6px; }
+
+/* 历史 */
+.history .pick { margin-bottom: 2px; }
+.hist {
+  width: 100%; text-align: left; font-size: 13px; padding: 6px 8px;
+  border: 1px solid var(--line); background: #fafbfc; border-radius: 6px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.hist:hover { border-color: var(--accent); color: var(--accent); }
 
 /* 编辑区 */
 .editor { display: flex; flex-direction: column; }
@@ -90,4 +118,14 @@ body {
 .progress .status { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .progress .download {
   font-size: 13px; color: #147a3d; font-weight: 600; white-space: nowrap;
+}
+
+/* 移动端：单列堆叠（编辑 → 预览 → 素材），只保证能看能用 */
+@media (max-width: 920px) {
+  .columns { grid-template-columns: 1fr; overflow: auto; }
+  .panel { overflow: visible; }
+  .editor { order: 1; min-height: 45vh; }
+  .preview { order: 2; }
+  .material { order: 3; }
+  .editor textarea { min-height: 220px; }
 }
