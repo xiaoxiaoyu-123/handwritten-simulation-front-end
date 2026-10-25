@@ -29,6 +29,14 @@ body {
 }
 .tabs button.on { background: var(--accent); color: #fff; font-weight: 600; }
 .topbar .tagline { margin-left: auto; color: var(--muted); font-size: 12px; }
+.gear {
+  margin-left: auto; padding: 5px 12px; font-size: 13px;
+  border: 1px solid var(--line); background: #fafbfc; border-radius: 8px; cursor: pointer;
+}
+.gear:hover { border-color: var(--accent); color: var(--accent); }
+.toolbar .sep { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }
+.toolbar .ai { background: #eef3fe; border-color: #c8d8f8; }
+.ai-warn { margin-top: 6px; font-size: 13px; color: #9a6b00; background: #fdf3dd; padding: 6px 10px; border-radius: 6px; }
 .backend-dot { font-size: 12px; padding: 2px 10px; border-radius: 10px; }
 .backend-dot.ok { color: #147a3d; background: #e2f5ea; }
 .backend-dot.down { color: #a02222; background: #fdeaea; }

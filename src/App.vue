@@ -1,16 +1,18 @@
 <script setup>
 import { onMounted, ref } from 'vue'
+import AiSettings from './components/AiSettings.vue'
 import ForgePanel from './components/ForgePanel.vue'
 import MaterialPanel from './components/MaterialPanel.vue'
 import EditorPanel from './components/EditorPanel.vue'
 import PreviewPanel from './components/PreviewPanel.vue'
-import { loadHistory, store } from './store'
+import { loadAiConfig, loadHistory, store } from './store'
 
 const view = ref('write')            // write | forge
 const backendOk = ref(false)
 
 onMounted(async () => {
   loadHistory()
+  loadAiConfig()
   try {
     const r = await fetch('/api/health')
     backendOk.value = r.ok
@@ -33,6 +35,7 @@ function useNewFont() {
         <button :class="{ on: view === 'write' }" @click="view = 'write'">写作业</button>
         <button :class="{ on: view === 'forge' }" @click="view = 'forge'">字体工坊</button>
       </nav>
+      <button class="gear" title="AI 设置（BYOK）" @click="store.showAiSettings = true">⚙ AI</button>
       <span class="backend-dot" :class="backendOk ? 'ok' : 'down'">
         {{ backendOk ? '后端已连接' : '后端未连接' }}
       </span>
@@ -45,5 +48,7 @@ function useNewFont() {
       <EditorPanel />
       <PreviewPanel />
     </main>
+
+    <AiSettings v-if="store.showAiSettings" @close="store.showAiSettings = false" />
   </div>
 </template>
