@@ -18,6 +18,9 @@ export const store = reactive({
   downloadUrl: '',
   downloadPngUrl: '',
 
+  lint: null,            // {fixable, blockers, skip_lines, ok} 记号体检结果
+  chaos: 'normal',       // 潦草度：neat | normal | messy
+
   history: [],           // [{ts, text, paper, font}] 最近 10 份
 
   // AI（BYOK：key 只存浏览器 localStorage，请求时带给后端转发）
@@ -62,7 +65,8 @@ export function loadHistory() {
 export function saveHistoryEntry() {
   if (!store.text.trim()) return
   store.history = [
-    { ts: Date.now(), text: store.text, paper: store.paper, font: store.font },
+    { ts: Date.now(), text: store.text, paper: store.paper,
+      font: store.font, chaos: store.chaos },
     ...store.history.filter(h => h.text !== store.text),
   ].slice(0, 10)
   localStorage.setItem(HKEY, JSON.stringify(store.history))

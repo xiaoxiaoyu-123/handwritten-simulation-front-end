@@ -20,6 +20,25 @@ async function refresh() {
 const selectedUserPaper = computed(() =>
   store.papers.find(p => p.id === store.paper && !p.builtin))
 
+// 潦草度三档（后端按档位缩放抖动参数，版式不变）
+const chaosLevels = [
+  { id: 'neat', label: '工整', hint: '认真写' },
+  { id: 'normal', label: '正常', hint: '默认' },
+  { id: 'messy', label: '潦草', hint: '赶时间' },
+]
+
+// 字体分组：内置（可公开）/ 本机私有 / 我上传的
+const fontGroups = computed(() => {
+  const builtin = store.fonts.filter(f => f.builtin && !f.local)
+  const local = store.fonts.filter(f => f.local)
+  const mine = store.fonts.filter(f => !f.builtin)
+  return [
+    { title: '内置', items: builtin },
+    { title: '本机私有', items: local },
+    { title: '我上传的', items: mine },
+  ].filter(g => g.items.length)
+})
+
 watch(selectedUserPaper, p => {
   if (p) {
     calib.value = {
@@ -116,6 +135,7 @@ function restore(h) {
   store.text = h.text
   store.paper = h.paper
   store.font = h.font
+  if (h.chaos) store.chaos = h.chaos
   store.previewNonce++
 }
 
@@ -156,16 +176,27 @@ function fmt(ts) {
       </div>
     </div>
 
+    <h2>潦草度</h2>
+    <div class="chaos">
+      <label v-for="c in chaosLevels" :key="c.id" :class="{ on: store.chaos === c.id }">
+        <input type="radio" name="chaos" :value="c.id" v-model="store.chaos" />
+        {{ c.label }}<small>{{ c.hint }}</small>
+      </label>
+    </div>
+
     <h2>字体</h2>
     <div class="font-list">
-      <div v-for="f in store.fonts" :key="f.id" class="pick">
-        <label>
-          <input type="radio" name="font" :value="f.id" v-model="store.font" />
-          {{ f.name }}
-          <span v-if="f.local" class="badge" title="来自本机手写模拟器，仅本机可见，不分发">本机</span>
-        </label>
-        <button v-if="!f.builtin" class="mini" title="删除" @click="deleteFont(f.id)">🗑</button>
-      </div>
+      <template v-for="grp in fontGroups" :key="grp.title">
+        <p v-if="grp.items.length > 1 || grp.title !== '内置'" class="group-title">{{ grp.title }}</p>
+        <div v-for="f in grp.items" :key="f.id" class="pick">
+          <label>
+            <input type="radio" name="font" :value="f.id" v-model="store.font" />
+            {{ f.name }}
+            <span v-if="f.local" class="badge" title="来自本机手写模拟器，仅本机可见，不分发">本机</span>
+          </label>
+          <button v-if="!f.builtin" class="mini" title="删除" @click="deleteFont(f.id)">🗑</button>
+        </div>
+      </template>
       <label class="upload" :class="{ busy: uploading === 'font' }">
         <input type="file" accept=".ttf,.otf" hidden @change="uploadFont" />
         {{ uploading === 'font' ? '校验生成中…' : '+ 上传我的字体（.ttf/.otf）' }}

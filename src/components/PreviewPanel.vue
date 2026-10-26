@@ -4,8 +4,16 @@ import { loadHistory, saveHistoryEntry, store } from '../store'
 
 onMounted(loadHistory)
 
+// 体检未通过（有需人工改的问题）时禁止生成，避免吐出带字面量的 PDF
+const blocked = computed(() => (store.lint?.blockers?.length || 0) > 0)
+const blockReason = computed(() => {
+  const n = store.lint?.blockers?.length || 0
+  return n ? `有 ${n} 处记号问题需先修改（见编辑区体检提示）` : ''
+})
+
 let timer = null
-watch(() => [store.text, store.paper, store.font, store.previewNonce], () => {
+watch(() => [store.text, store.paper, store.font, store.chaos,
+             store.previewNonce], () => {
   clearTimeout(timer)
   if (!store.text.trim()) {
     store.previewUrl = ''
@@ -22,7 +30,7 @@ async function preview() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: store.text, paper: store.paper,
-                             font: store.font }),
+                             font: store.font, chaos: store.chaos }),
     })
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
@@ -52,7 +60,7 @@ async function generate() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text: store.text, paper: store.paper,
-                           font: store.font }),
+                           font: store.font, chaos: store.chaos }),
   })
   if (!r.ok) {
     const err = await r.json().catch(() => ({}))
@@ -116,11 +124,12 @@ const statusText = computed(() => {
     </div>
     <p v-if="store.previewError" class="error">{{ store.previewError }}</p>
 
-    <button class="primary" :disabled="!store.text.trim()
+    <button class="primary" :disabled="!store.text.trim() || blocked
       || (store.job && !['done', 'failed'].includes(store.job.status))"
       @click="generate">
       生成（共 {{ Math.max(1, Math.ceil((store.text ? store.text.split('\n').length : 0) / 25)) }} 页）
     </button>
+    <p v-if="blocked" class="error">{{ blockReason }}</p>
 
     <div class="progress">
       <div class="bar"><div class="fill" :style="{ width: percent + '%' }"></div></div>

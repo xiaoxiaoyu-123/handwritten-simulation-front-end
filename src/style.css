@@ -90,6 +90,21 @@ body {
 .calib-form input { width: 90px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; }
 .primary.small { padding: 7px; font-size: 13px; width: 100%; border: none; border-radius: 6px; }
 
+/* 潦草度 */
+.chaos { display: flex; gap: 6px; }
+.chaos label {
+  flex: 1; flex-direction: column; align-items: center; gap: 0;
+  padding: 6px 2px; border: 1px solid var(--line); border-radius: 8px;
+  cursor: pointer; font-size: 13px; line-height: 1.3;
+}
+.chaos label.on { border-color: var(--accent); background: #eef3fe; color: var(--accent); }
+.chaos label input { display: none; }
+.chaos label small { font-size: 11px; color: var(--muted); }
+.group-title {
+  margin: 6px 0 2px; font-size: 11px; color: var(--muted);
+  border-top: 1px dashed var(--line); padding-top: 6px;
+}
+
 /* 历史 */
 .history .pick { margin-bottom: 2px; }
 .hist {

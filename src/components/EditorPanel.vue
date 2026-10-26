@@ -1,9 +1,11 @@
 <script setup>
 import { nextTick, ref } from 'vue'
+import LintBar from './LintBar.vue'
 import { store } from '../store'
 
 const ta = ref(null)
 const photoFile = ref(null)
+const lintBar = ref(null)
 
 // 记号工具条：点击向光标处插入记号模板，光标落到第一个 } 前
 const marks = [
@@ -87,6 +89,8 @@ async function solve() {
   if (data?.text) {
     store.text = data.text
     store.aiUsed = true           // AI 作答 → 显示核对提醒
+    await nextTick()
+    lintBar.value?.runLint()      // AI 返回后立刻体检，别等渲染报错
   }
 }
 </script>
@@ -117,6 +121,7 @@ async function solve() {
     <p v-if="store.aiUsed" class="ai-warn">
       ⚠ 当前内容由 AI 生成，渲染导出前务必逐行自行核对
     </p>
+    <LintBar ref="lintBar" @fix-all="() => {}" />
     <p v-if="store.aiError" class="error">{{ store.aiError }}</p>
     <div class="meta">行数 {{ store.text ? store.text.split('\n').length : 0 }}</div>
   </section>
