@@ -133,6 +133,7 @@ function fmt(ts) {
         <label>
           <input type="radio" name="paper" :value="p.id" v-model="store.paper" />
           {{ p.name }}
+          <span v-if="p.local" class="badge" title="来自本机手写模拟器，仅本机可见，不分发">本机</span>
         </label>
         <button v-if="!p.builtin" class="mini" title="删除" @click="deletePaper(p.id)">🗑</button>
       </div>
@@ -161,6 +162,7 @@ function fmt(ts) {
         <label>
           <input type="radio" name="font" :value="f.id" v-model="store.font" />
           {{ f.name }}
+          <span v-if="f.local" class="badge" title="来自本机手写模拟器，仅本机可见，不分发">本机</span>
         </label>
         <button v-if="!f.builtin" class="mini" title="删除" @click="deleteFont(f.id)">🗑</button>
       </div>
