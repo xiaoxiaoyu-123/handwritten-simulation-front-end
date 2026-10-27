@@ -28,10 +28,6 @@ export const store = reactive({
 
   history: [],           // [{ts, text, paper, font}] 最近 10 份
 
-  // 部署期访问口令（后端设了 HS_PASSWORD 才有）
-  authRequired: false,   // 站点开启了口令
-  authed: true,          // 当前会话是否已通过
-
   // AI 由站点内置 Key 提供（服务端环境变量），用户无需配置
   aiBusy: false,
   aiUsed: false,         // 当前文本来自 AI → 显示核对提醒
