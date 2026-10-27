@@ -37,6 +37,7 @@ async function runLint() {
 const fixable = computed(() => store.lint?.fixable || [])
 const blockers = computed(() => store.lint?.blockers || [])
 const skipLines = computed(() => store.lint?.skip_lines || [])
+const notes = computed(() => store.lint?.notes || [])
 const clean = computed(() => fixable.value.length === 0
                             && blockers.value.length === 0)
 
@@ -99,6 +100,9 @@ defineExpose({ runLint, byLine })
         <span v-if="skipLines.length" class="skip-text">
           🟡 {{ skipLines.length }} 行像是跳步了，建议核对
         </span>
+        <span v-if="notes.length" class="note-text">
+          ℹ {{ notes.length }} 行较长，会自动断行
+        </span>
         <button class="btn-toggle" @click="expanded = !expanded">
           {{ expanded ? '收起' : '查看详情' }}
         </button>
@@ -117,6 +121,11 @@ defineExpose({ runLint, byLine })
           <code>{{ f.raw }}</code>
           <span class="arrow">→</span>
           <code class="good">{{ f.suggestion }}</code>
+        </div>
+        <div v-for="n in notes" :key="'n' + n.line" class="item note">
+          <span class="ln">第 {{ n.line }} 行</span>
+          <b>{{ n.message }}</b>
+          <span class="hint">{{ n.hint }}</span>
         </div>
         <div v-for="s in skipLines" :key="'s' + s.line" class="item skip">
           <span class="ln">第 {{ s.line }} 行</span>
@@ -140,6 +149,8 @@ defineExpose({ runLint, byLine })
 .warn-text { color: #8a6a00; display: flex; align-items: center; gap: 6px; }
 .err-text { color: #a02222; }
 .skip-text { color: #8a6a00; }
+.note-text { color: var(--muted); }
+.item.note b { color: var(--muted); font-weight: 500; }
 .btn-fix {
   padding: 3px 10px; font-size: 12px; border: 1px solid #d9b64a;
   background: #fff8e4; border-radius: 6px; cursor: pointer; color: #7a5c00;
