@@ -2,7 +2,8 @@
 
 手写模拟网站前端（Vue 3 + Vite）：把文本渲染成"手写作业"图片与 PDF。
 
-对应后端仓库：[handwritten-simulation-backend](https://github.com/xiaoxiaoyu-123/handwritten-simulation-backend)
+> 后端（FastAPI + 渲染引擎）目前未开源：前端通过 `/api` 反代使用，
+> 本仓库可独立部署与二次开发（开发期 `/api` 代理到 `127.0.0.1:8000`）。
 
 ## 页面结构（PC 三栏）
 
@@ -21,7 +22,8 @@ npm install
 npm run dev      # http://localhost:5173，/api 已代理到后端 8000 端口
 ```
 
-先启动后端（`uvicorn app.main:app --port 8000`），顶栏会显示"后端已连接"。
+需要一个提供 `/api` 的后端服务（自建或对接已有实例）：
+开发期在 `vite.config.js` 里改代理目标，顶栏会显示"后端已连接"。
 
 ## 分期计划
 
@@ -30,10 +32,12 @@ npm run dev      # http://localhost:5173，/api 已代理到后端 8000 端口
 | P0 | 接 /api/preview 实时预览（防抖 500ms）、生成任务进度条、PDF/PNG 下载、程序生成预置纸选择 |
 | P1 | 上传纸张（自动测行距+手动校准）、上传字体、历史记录、记号工具条插入光标位 |
 | P2 | 字体工坊（模板下载 → 上传手写 → 校对 UI → 生成 TTF） |
-| P3 | AI 增强（BYOK）：题目转录/解题；错字涂改模拟 |
+| P3 | AI 增强（站点内置 Key）：题目转录/解题 |
 
 ## 说明
 
 - 本项目仅供个人学习演示用途。
+- 后端接口路径约定见 `src/api.js` 与各组件的 `apiFetch` 调用；
+  主要端点：`/api/preview`、`/api/jobs`、`/api/lint`、`/api/ai/*`。
 - 支持的记号：`fr{分子}{分母}`、`√(...)`、`∫[下,上]`、`sb{底}{下标}`、
   `pd{下标}`、`ov{X}`、`lim{过程}`、`Σ[下,上]`、`∏[下,上]`、`{N` 分段大括号。
