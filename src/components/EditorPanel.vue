@@ -2,7 +2,6 @@
 import { nextTick, ref } from 'vue'
 import LintBar from './LintBar.vue'
 import { store } from '../store'
-import { apiFetch } from '../api'
 
 const ta = ref(null)
 const photoFile = ref(null)
@@ -37,7 +36,7 @@ async function callAi(path, body) {
   store.aiBusy = true
   store.aiError = ''
   try {
-    const r = await apiFetch(path, {
+    const r = await fetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...store.aiconfig, ...body }),

@@ -1,7 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { store } from '../store'
-import { apiFetch } from '../api'
 
 const step = ref(1)
 const charset = ref('common100')
@@ -46,7 +45,7 @@ async function upload(e) {
       .forEach(f => fd.append('files', f))
     fd.append('charset', charset.value)
     fd.append('custom', customText.value)
-    const r = await apiFetch('/api/fontforge/upload', { method: 'POST', body: fd })
+    const r = await fetch('/api/fontforge/upload', { method: 'POST', body: fd })
     const data = await r.json()
     if (!r.ok) {
       error.value = String(data.detail || '上传失败')
@@ -65,7 +64,7 @@ async function build() {
   building.value = true
   error.value = ''
   try {
-    const r = await apiFetch('/api/fontforge/build', {
+    const r = await fetch('/api/fontforge/build', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: session.value.session_id,
@@ -78,7 +77,7 @@ async function build() {
     } else {
       result.value = data
       // 自动入库并选中，回"写作业"立即可用
-      store.fonts = await (await apiFetch('/api/fonts')).json()
+      store.fonts = await (await fetch('/api/fonts')).json()
       store.font = data.id
     }
   } finally {

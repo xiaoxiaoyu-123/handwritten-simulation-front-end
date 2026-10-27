@@ -1,7 +1,6 @@
 <script setup>
 import { ref } from 'vue'
 import { AI_PRESETS, saveAiConfig, store } from '../store'
-import { apiFetch } from '../api'
 
 const emit = defineEmits(["close"])
 
@@ -14,7 +13,7 @@ async function test() {
   testing.value = true
   testResult.value = ""
   try {
-    const r = await apiFetch("/api/ai/test", {
+    const r = await fetch("/api/ai/test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(cfg.value),

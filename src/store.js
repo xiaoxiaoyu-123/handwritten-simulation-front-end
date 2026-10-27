@@ -23,10 +23,6 @@ export const store = reactive({
 
   history: [],           // [{ts, text, paper, font}] 最近 10 份
 
-  // 部署期访问口令（后端设了 HS_PASSWORD 才有）
-  authRequired: false,   // 站点开启了口令
-  authed: true,          // 当前会话是否已通过
-
   // AI（BYOK：key 只存浏览器 localStorage，请求时带给后端转发）
   aiconfig: null,        // {base_url, api_key, model}
   showAiSettings: false,
