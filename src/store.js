@@ -12,6 +12,11 @@ export const store = reactive({
   previewUrl: '',
   previewing: false,
   previewError: '',
+  previewGeom: null,     // 后端返回的版面几何 + 渲染行→源行映射（点行跳转）
+  focusLine: 0,          // 请求编辑区聚焦的源行（1 基，0=无）
+
+  problemText: '',       // 解题时的题目原文（对照用）
+  problemImage: '',      // 拍题照片 dataURL（对照用）
 
   job: null,             // {id, status, done, total, error}
   jobError: '',

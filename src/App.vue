@@ -49,6 +49,12 @@ function useNewFont() {
       <PreviewPanel />
     </main>
 
+    <footer class="privacy">
+      本工具不保存你的题文与导出文件（任务产物 1 小时后自动删除）；AI 功能用
+      你自己填的接口和 Key（只存在本机浏览器），题文会发给你配置的那个服务；
+      上传的纸张/字体仅本机可见，可随时删除。
+    </footer>
+
     <AiSettings v-if="store.showAiSettings" @close="store.showAiSettings = false" />
   </div>
 </template>

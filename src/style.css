@@ -123,13 +123,48 @@ body {
 }
 .toolbar button:hover { border-color: var(--accent); color: var(--accent); }
 .cheatsheet { margin-left: auto; font-size: 13px; color: var(--muted); align-self: center; }
+.editor-body { display: flex; flex: 1; min-height: 300px; }
+/* 行号栏：行高必须与 textarea 的 15px×1.9 完全一致，否则会错位 */
+.gutter {
+  width: 36px; flex: none; overflow: hidden; padding-top: 14px;
+  text-align: right; padding-right: 6px; user-select: none;
+  background: #fafbfc; border: 1px solid var(--line); border-right: none;
+  border-radius: 8px 0 0 8px;
+}
+.gutter .ln {
+  height: 28.5px; line-height: 28.5px; font-size: 12px;
+  color: var(--muted); cursor: pointer;
+}
+.gutter .ln:hover { color: var(--accent); }
+.gutter .ln.skip { background: #fff3c4; color: #8a6a00; font-weight: 600; }
+.gutter .ln.block { background: #fde6e6; color: #a02222; font-weight: 600; }
 .editor textarea {
-  flex: 1; resize: none; border: 1px solid var(--line); border-radius: 8px;
+  flex: 1; resize: none; border: 1px solid var(--line);
+  border-radius: 0 8px 8px 0;
   padding: 14px; font-size: 15px; line-height: 1.9; font-family: inherit;
   outline: none; min-height: 300px;
 }
 .editor textarea:focus { border-color: var(--accent); }
 .editor .meta { margin-top: 8px; font-size: 12px; color: var(--muted); }
+.editor .meta-skip { color: #8a6a00; }
+/* 题目原文对照卡 */
+.problem {
+  margin-bottom: 8px; padding: 8px 10px; border-radius: 8px;
+  background: #f4f7fd; border: 1px solid #d9e3f5; font-size: 13px;
+}
+.problem summary { cursor: pointer; color: #2f6fed; }
+.problem summary .tip { color: var(--muted); font-size: 12px; margin-left: 6px; }
+.problem img { display: block; max-width: 100%; max-height: 160px; margin: 8px 0; }
+.problem pre {
+  margin: 8px 0 0; white-space: pre-wrap; word-break: break-all;
+  font-family: inherit; font-size: 13px; color: #333;
+}
+.preview .page img.clickable { cursor: crosshair; }
+.privacy {
+  margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line);
+  font-size: 12px; line-height: 1.7; color: var(--muted);
+}
+.hint-line { margin-top: 6px; font-size: 12px; color: var(--muted); }
 
 /* 预览区 */
 .preview { display: flex; flex-direction: column; }

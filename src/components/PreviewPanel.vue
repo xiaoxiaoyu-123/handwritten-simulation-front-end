@@ -42,6 +42,7 @@ async function preview() {
     } else {
       const data = await r.json()
       store.previewUrl = data.image
+      store.previewGeom = data.geom || null
       store.previewError = data.warnings?.length
         ? data.warnings.join('\n') : ''
     }
@@ -50,6 +51,23 @@ async function preview() {
   } finally {
     store.previewing = false
   }
+}
+
+// 点预览某一行 → 编辑区跳到对应源文本行。
+// 后端给了 first_baseline / line_spacing / rendered_to_src：自动断行时
+// 一条源行会占多条渲染行，映射表把它们折回同一行。
+function jumpToLine(e) {
+  const g = store.previewGeom
+  if (!g || !g.line_spacing) return
+  const img = e.currentTarget
+  const rect = img.getBoundingClientRect()
+  if (!rect.height) return
+  const y = (e.clientY - rect.top) * (g.height / rect.height)
+  const idx = Math.round((y - g.first_baseline) / g.line_spacing)
+  const clamped = Math.max(0, Math.min(idx, g.rendered_lines - 1))
+  const src = g.rendered_to_src?.[String(clamped)]
+  if (src === undefined || src === null) return
+  store.focusLine = src + 1
 }
 
 async function generate() {
@@ -116,12 +134,17 @@ const statusText = computed(() => {
   <section class="panel preview">
     <h2>实时预览（改动后自动刷新）</h2>
     <div class="page">
-      <img v-if="store.previewUrl" :src="store.previewUrl" alt="预览" />
+      <img v-if="store.previewUrl" :src="store.previewUrl" alt="预览"
+           class="clickable" title="点任意一行 → 编辑框跳到对应源文本行"
+           @click="jumpToLine" />
       <p v-else-if="store.previewing" class="placeholder">渲染中…</p>
       <p v-else class="placeholder">
         在左侧输入文本，这里会显示第一页手写效果
       </p>
     </div>
+    <p v-if="store.previewUrl" class="hint-line">
+      提示：点预览里的某一行，左侧编辑框会跳到对应那一行
+    </p>
     <p v-if="store.previewError" class="error">{{ store.previewError }}</p>
 
     <button class="primary" :disabled="!store.text.trim() || blocked
