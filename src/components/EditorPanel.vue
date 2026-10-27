@@ -77,7 +77,7 @@ async function callAi(path, body) {
     const r = await apiFetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...store.aiconfig, ...body }),
+      body: JSON.stringify(body),
     })
     const data = await r.json().catch(() => ({}))
     if (!r.ok) {
@@ -96,11 +96,6 @@ async function callAi(path, body) {
 async function transcribe(e) {
   const f = e.target.files[0]
   if (!f) return
-  if (!store.aiconfig) {
-    store.showAiSettings = true
-    e.target.value = ''
-    return
-  }
   const dataUrl = await new Promise((res) => {
     const rd = new FileReader()
     rd.onload = () => res(rd.result)
@@ -120,10 +115,6 @@ async function transcribe(e) {
 async function solve() {
   if (!store.text.trim()) {
     store.aiError = '先在文本框里放题目（拍照识别或手动粘贴）'
-    return
-  }
-  if (!store.aiconfig) {
-    store.showAiSettings = true
     return
   }
   const problem = store.text          // 先存题目原文，供对照栏显示
