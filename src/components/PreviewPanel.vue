@@ -23,7 +23,14 @@ watch(() => [store.text, store.paper, store.font, store.chaos,
   timer = setTimeout(preview, 500)          // 防抖 500ms
 })
 
+// 取消上一次预览请求：狂打字时旧的渲染还没回来就被新输入取代，
+// 不取消的话请求会在服务端排队堆积，把单 worker 的 CPU 占满
+let abortCtl = null
+
 async function preview() {
+  if (abortCtl) abortCtl.abort()
+  const ctl = new AbortController()
+  abortCtl = ctl
   store.previewing = true
   store.previewError = ''
   try {
@@ -32,6 +39,7 @@ async function preview() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: store.text, paper: store.paper,
                              font: store.font, chaos: store.chaos }),
+      signal: ctl.signal,
     })
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
@@ -47,10 +55,11 @@ async function preview() {
       store.previewError = data.warnings?.length
         ? data.warnings.join('\n') : ''
     }
-  } catch {
+  } catch (e) {
+    if (e?.name === 'AbortError' || abortCtl !== ctl) return
     store.previewError = '无法连接后端'
   } finally {
-    store.previewing = false
+    if (abortCtl === ctl) store.previewing = false
   }
 }
 
