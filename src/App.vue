@@ -5,21 +5,32 @@ import ForgePanel from './components/ForgePanel.vue'
 import MaterialPanel from './components/MaterialPanel.vue'
 import EditorPanel from './components/EditorPanel.vue'
 import PreviewPanel from './components/PreviewPanel.vue'
+import LoginGate from './components/LoginGate.vue'
 import { loadAiConfig, loadHistory, store } from './store'
+import { checkAuth } from './api'
 
 const view = ref('write')            // write | forge
 const backendOk = ref(false)
 
-onMounted(async () => {
+async function boot() {
   loadHistory()
   loadAiConfig()
+  await checkAuth()
   try {
     const r = await fetch('/api/health')
     backendOk.value = r.ok
   } catch {
     backendOk.value = false
   }
-})
+}
+
+onMounted(boot)
+
+function onAuthed() {
+  store.authRequired = false
+  store.authed = true
+  boot()
+}
 
 function useNewFont() {
   view.value = 'write'
@@ -28,6 +39,8 @@ function useNewFont() {
 </script>
 
 <template>
+  <LoginGate v-if="store.authRequired && !store.authed" @ok="onAuthed" />
+
   <div class="layout">
     <header class="topbar">
       <span class="logo">✍️ 手写模拟</span>
@@ -39,7 +52,10 @@ function useNewFont() {
       <span class="backend-dot" :class="backendOk ? 'ok' : 'down'">
         {{ backendOk ? '后端已连接' : '后端未连接' }}
       </span>
-      <span class="tagline">仅供个人学习演示使用</span>
+      <span class="tagline">
+        个人学习演示 · 题文与 PDF 不落库（1 小时后自动删除）·
+        AI 密钥只存在你的浏览器
+      </span>
     </header>
 
     <ForgePanel v-if="view === 'forge'" @back="useNewFont" />

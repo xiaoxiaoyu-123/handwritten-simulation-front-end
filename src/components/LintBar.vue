@@ -2,6 +2,7 @@
 // 记号体检条：输入时自动检查（防抖），可修的一键修，不可修的定位到行。
 import { computed, onMounted, ref, watch } from 'vue'
 import { store } from '../store'
+import { apiFetch } from '../api'
 
 const expanded = ref(false)
 const fixing = ref(false)
@@ -22,7 +23,7 @@ onMounted(() => {
 
 async function runLint() {
   try {
-    const r = await fetch('/api/lint', {
+    const r = await apiFetch('/api/lint', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: store.text }),
@@ -44,7 +45,7 @@ async function fixAll() {
   if (!fixable.value.length) return
   fixing.value = true
   try {
-    const r = await fetch('/api/lint/fix', {
+    const r = await apiFetch('/api/lint/fix', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: store.text, fixes: fixable.value }),
