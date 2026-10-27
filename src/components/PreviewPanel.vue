@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, watch } from 'vue'
 import { loadHistory, saveHistoryEntry, store } from '../store'
+import { apiFetch } from '../api'
 
 onMounted(loadHistory)
 
@@ -26,7 +27,7 @@ async function preview() {
   store.previewing = true
   store.previewError = ''
   try {
-    const r = await fetch('/api/preview', {
+    const r = await apiFetch('/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: store.text, paper: store.paper,
@@ -74,7 +75,7 @@ async function generate() {
   store.jobError = ''
   store.downloadUrl = ''
   store.downloadPngUrl = ''
-  const r = await fetch('/api/jobs', {
+  const r = await apiFetch('/api/jobs', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text: store.text, paper: store.paper,
@@ -94,7 +95,7 @@ async function poll() {
   while (store.job && store.job.status !== 'done'
          && store.job.status !== 'failed') {
     await new Promise(res => setTimeout(res, 800))
-    const r = await fetch(`/api/jobs/${store.job.id}`)
+    const r = await apiFetch(`/api/jobs/${store.job.id}`)
     if (!r.ok) break
     store.job = await r.json()
   }

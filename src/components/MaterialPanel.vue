@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { clearHistory, store } from '../store'
+import { apiFetch } from '../api'
 
 const paperFile = ref(null)
 const fontFile = ref(null)
@@ -13,8 +14,8 @@ onMounted(() => {
 })
 
 async function refresh() {
-  store.papers = await (await fetch('/api/papers')).json()
-  store.fonts = await (await fetch('/api/fonts')).json()
+  store.papers = await (await apiFetch('/api/papers')).json()
+  store.fonts = await (await apiFetch('/api/fonts')).json()
 }
 
 const selectedUserPaper = computed(() =>
@@ -57,7 +58,7 @@ async function uploadPaper(e) {
   const fd = new FormData()
   fd.append('file', f)
   try {
-    const r = await fetch('/api/papers/upload', { method: 'POST', body: fd })
+    const r = await apiFetch('/api/papers/upload', { method: 'POST', body: fd })
     const data = await r.json()
     if (!r.ok) {
       alert(data.detail || '上传失败')
@@ -81,7 +82,7 @@ async function saveCalib() {
   const params = { ...p.params, line_spacing: calib.value.ls,
                    top_margin: calib.value.top,
                    left_margin: calib.value.left }
-  const r = await fetch(`/api/papers/${p.id}/params`, {
+  const r = await apiFetch(`/api/papers/${p.id}/params`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ params }),
@@ -95,7 +96,7 @@ async function saveCalib() {
 
 async function deletePaper(id) {
   if (!confirm('删除这张纸张？')) return
-  await fetch(`/api/papers/${id}`, { method: 'DELETE' })
+  await apiFetch(`/api/papers/${id}`, { method: 'DELETE' })
   if (store.paper === id) store.paper = 'a4-lined'
   await refresh()
   store.previewNonce++
@@ -108,7 +109,7 @@ async function uploadFont(e) {
   const fd = new FormData()
   fd.append('file', f)
   try {
-    const r = await fetch('/api/fonts/upload', { method: 'POST', body: fd })
+    const r = await apiFetch('/api/fonts/upload', { method: 'POST', body: fd })
     const data = await r.json()
     if (!r.ok) {
       alert(data.detail || '上传失败')
@@ -125,7 +126,7 @@ async function uploadFont(e) {
 
 async function deleteFont(id) {
   if (!confirm('删除这个字体？')) return
-  await fetch(`/api/fonts/${id}`, { method: 'DELETE' })
+  await apiFetch(`/api/fonts/${id}`, { method: 'DELETE' })
   if (store.font === id) store.font = 'default'
   await refresh()
   store.previewNonce++

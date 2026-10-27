@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import LintBar from './LintBar.vue'
 import { store } from '../store'
+import { apiFetch } from '../api'
 
 const ta = ref(null)
 const gutter = ref(null)
@@ -73,7 +74,7 @@ async function callAi(path, body) {
   store.aiBusy = true
   store.aiError = ''
   try {
-    const r = await fetch(path, {
+    const r = await apiFetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...store.aiconfig, ...body }),
