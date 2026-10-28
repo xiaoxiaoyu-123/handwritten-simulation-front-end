@@ -33,6 +33,10 @@ export const store = reactive({
   aiKind: '',            // 'transcribe' | 'solve'——分开显示"抄题/解题中"
   aiUsed: false,         // 当前文本来自 AI → 显示核对提醒
   aiPending: null,       // 解题返回时用户已改动编辑区 → {text, problem} 待应用
+  aiRaw: '',             // 模型原文（流式时逐字累积）→「AI 原文」抽屉展示
+  aiReasoning: '',       // 推理模型的思考过程（reasoning 事件累积）
+  aiElapsed: 0,          // 本次解题耗时（秒，done 事件带）
+  aiModel: '',           // 本次解题用的模型名（仅展示）
 })
 
 const HKEY = 'hs_history_v1'

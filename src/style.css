@@ -179,6 +179,23 @@ body {
   background: #fff; border-radius: 6px; cursor: pointer; color: #2f6fed;
 }
 .import-actions button.ghost { color: var(--muted); border-color: var(--line); }
+/* AI 原文抽屉（P2/P3） */
+.rawbox {
+  margin-bottom: 8px; padding: 8px 10px; border-radius: 8px;
+  background: #f7f6fd; border: 1px solid #e0dbf5; font-size: 13px;
+}
+.rawbox summary { cursor: pointer; color: #6b46c1; }
+.rawbox summary .tip { color: var(--muted); font-size: 12px; margin-left: 6px; }
+.rawbox .rawtext {
+  margin: 8px 0 0; max-height: 260px; overflow: auto; padding: 8px;
+  background: #fff; border: 1px solid #e8e3f7; border-radius: 6px;
+  white-space: pre-wrap; word-break: break-all; font-size: 12px; color: #333;
+}
+.rawbox .reasoning {
+  margin: 8px 0 0; max-height: 160px; overflow: auto; padding: 8px;
+  background: #fbfaff; border: 1px dashed #d8d0f0; border-radius: 6px;
+  white-space: pre-wrap; word-break: break-all; font-size: 12px; color: #6b6584;
+}
 /* 题目原文对照卡 */
 .problem {
   margin-bottom: 8px; padding: 8px 10px; border-radius: 8px;

@@ -143,6 +143,8 @@ async function transcribe(e) {
   }
 }
 
+// AI 解题：走流式端点（NDJSON），边生成边把原文逐字显示在抽屉里；
+// 停止 = abort fetch → 后端检测断开 → 取消上游 DeepSeek 请求，不白烧 token
 async function solve() {
   if (!store.text.trim()) {
     store.aiError = '先在文本框里放题目（拍照识别或手动粘贴）'
@@ -150,14 +152,81 @@ async function solve() {
   }
   const problem = store.text          // 先存题目原文，供对照栏显示
   const snapshot = store.text         // 等待期间用户可能继续编辑
-  const data = await callAi('/api/ai/solve', { problem })
-  if (!data?.text) return
-  if (store.text === snapshot) {
-    applyAiAnswer(data.text, problem)
-  } else {
-    // 等待期间编辑区变了：不覆盖，横幅里等用户决定
-    store.aiPending = { text: data.text, problem }
+  store.aiBusy = true
+  store.aiKind = 'solve'
+  store.aiError = ''
+  store.aiRaw = ''
+  store.aiReasoning = ''
+  store.aiElapsed = 0
+  store.aiModel = ''
+  aiCtl = new AbortController()
+  startAiTimer()
+  try {
+    const r = await apiFetch('/api/ai/solve/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ problem }),
+      signal: aiCtl.signal,
+    })
+    if (!r.ok || !r.body) {
+      const data = await r.json().catch(() => ({}))
+      store.aiError = String(data.detail || `AI 请求失败（HTTP ${r.status}）`)
+      return
+    }
+    const reader = r.body.getReader()
+    const dec = new TextDecoder()
+    let buf = ''
+    let result = null
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buf += dec.decode(value, { stream: true })
+      let idx
+      while ((idx = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, idx).trim()
+        buf = buf.slice(idx + 1)
+        if (!line) continue
+        let ev
+        try { ev = JSON.parse(line) } catch { continue }
+        if (ev.type === 'delta') store.aiRaw += ev.text
+        else if (ev.type === 'reasoning') store.aiReasoning += ev.text
+        else if (ev.type === 'error') store.aiError = ev.message
+        else if (ev.type === 'done') result = ev
+        // meta / ping 忽略
+      }
+    }
+    if (result?.text) {
+      store.aiElapsed = result.elapsed
+      store.aiModel = result.model
+      store.aiRaw = result.raw
+      if (store.text === snapshot) {
+        applyAiAnswer(result.text, problem)
+      } else {
+        // 等待期间编辑区变了：不覆盖，横幅里等用户决定
+        store.aiPending = { text: result.text, problem }
+      }
+    }
+  } catch (e) {
+    if (e?.name === 'AbortError') store.aiError = '已停止（已断开与 AI 的连接）'
+    else store.aiError = '无法连接后端'
+  } finally {
+    stopAiTimer()
+    store.aiBusy = false
+    store.aiKind = ''
+    aiCtl = null
   }
+}
+
+const copied = ref(false)
+
+async function copyRaw() {
+  try {
+    await navigator.clipboard.writeText(
+      (store.aiReasoning ? `【思考过程】\n${store.aiReasoning}\n\n` : '')
+      + (store.aiRaw || ''))
+    copied.value = true
+    setTimeout(() => { copied.value = false }, 1500)
+  } catch { /* 剪贴板不可用时静默 */ }
 }
 
 function applyAiAnswer(text, problem) {
@@ -267,6 +336,23 @@ function replaceAllImported() {
     <p v-if="store.aiBusy" class="ai-hint">
       通常 30–90 秒；期间可以继续编辑，答案返回时若文本已改动会先询问再覆盖
     </p>
+
+    <!-- AI 原文抽屉（P2/P3）：流式时逐字出现，仅供阅读核对，永不进 PDF -->
+    <details v-if="store.aiRaw || store.aiReasoning" class="rawbox"
+             :open="store.aiBusy || undefined">
+      <summary>
+        📄 AI 原文（模型原始输出，仅供核对）
+        <span class="tip">{{ store.aiBusy
+          ? '生成中…'
+          : `模型 ${store.aiModel} · 耗时 ${store.aiElapsed}s` }}</span>
+      </summary>
+      <pre v-if="store.aiReasoning" class="reasoning">【思考过程】
+{{ store.aiReasoning }}</pre>
+      <pre class="rawtext">{{ store.aiRaw }}</pre>
+      <div class="import-actions">
+        <button @click="copyRaw">{{ copied ? '✓ 已复制' : '复制原文' }}</button>
+      </div>
+    </details>
 
     <!-- 文档导入预览：解析完先确认，不直接覆盖编辑区 -->
     <div v-if="importPreview" class="import-box">
