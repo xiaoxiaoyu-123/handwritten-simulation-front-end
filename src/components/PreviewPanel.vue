@@ -46,7 +46,7 @@ async function preview() {
       const d = err.detail
       store.previewError = typeof d === 'object'
         ? `${d.message}：${(d.details || []).join('；')}`
-        : String(d || '预览失败')
+        : String(d || `预览失败（HTTP ${r.status}）`)
       store.previewUrl = ''
     } else {
       const data = await r.json()

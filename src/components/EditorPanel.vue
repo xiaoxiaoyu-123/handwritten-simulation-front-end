@@ -81,7 +81,7 @@ async function callAi(path, body) {
     })
     const data = await r.json().catch(() => ({}))
     if (!r.ok) {
-      store.aiError = String(data.detail || 'AI 请求失败')
+      store.aiError = String(data.detail || `AI 请求失败（HTTP ${r.status}）`)
       return null
     }
     return data
