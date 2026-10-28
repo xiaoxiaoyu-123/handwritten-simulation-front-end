@@ -54,7 +54,10 @@ export function saveHistoryEntry() {
   if (!store.text.trim()) return
   store.history = [
     { ts: Date.now(), text: store.text, paper: store.paper,
-      font: store.font, chaos: store.chaos },
+      font: store.font, chaos: store.chaos,
+      // AI 解题的原文/排版版一并留存，恢复历史时抽屉还能对照
+      raw: store.aiRaw || '', tex: store.aiTex || '',
+      model: store.aiModel || '', elapsed: store.aiElapsed || 0 },
     ...store.history.filter(h => h.text !== store.text),
   ].slice(0, 10)
   localStorage.setItem(HKEY, JSON.stringify(store.history))

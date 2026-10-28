@@ -11,6 +11,8 @@ const gutter = ref(null)
 const photoFile = ref(null)
 const lintBar = ref(null)
 let aiCtl = null            // 进行中 AI 请求的 AbortController（「停止」用）
+const lastPhoto = ref('')   // 最近一次拍题照片（失败重试用）
+const retryKind = ref('')   // 失败的 AI 调用类型（'solve'|'transcribe'）
 
 // 行号栏：行数 / 跳步行集合（lint 的 skip_lines 按行号）
 const lineCount = computed(() =>
@@ -90,8 +92,10 @@ async function callAi(path, body) {
     const data = await r.json().catch(() => ({}))
     if (!r.ok) {
       store.aiError = String(data.detail || `AI 请求失败（HTTP ${r.status}）`)
+      retryKind.value = store.aiKind
       return null
     }
+    retryKind.value = ''
     return data
   } catch (e) {
     if (e?.name === 'AbortError') {
@@ -99,12 +103,25 @@ async function callAi(path, body) {
     } else {
       store.aiError = '无法连接后端'
     }
+    retryKind.value = store.aiKind
     return null
   } finally {
     stopAiTimer()
     store.aiBusy = false
     store.aiKind = ''
     aiCtl = null
+  }
+}
+
+// 失败重试：按上次失败的种类重发（抄题用留存的照片，解题用当前编辑区文本）
+function retryAi() {
+  if (store.aiBusy || !retryKind.value) return
+  const kind = retryKind.value
+  retryKind.value = ''
+  if (kind === 'transcribe' && lastPhoto.value) {
+    transcribeDataUrl(lastPhoto.value)
+  } else {
+    solve()
   }
 }
 
@@ -135,6 +152,12 @@ async function transcribe(e) {
     rd.onload = () => res(rd.result)
     rd.readAsDataURL(f)
   })
+  await transcribeDataUrl(dataUrl)
+}
+
+// 拍题核心（重试按钮复用）：照片 dataURL → 抄题入编辑区
+async function transcribeDataUrl(dataUrl) {
+  lastPhoto.value = dataUrl
   const data = await callAi('/api/ai/transcribe', { image: dataUrl })
   if (data?.text) {
     store.text = (store.text ? store.text + '\n' : '') + data.text
@@ -194,6 +217,7 @@ async function solve() {
     if (!r.ok || !r.body) {
       const data = await r.json().catch(() => ({}))
       store.aiError = String(data.detail || `AI 请求失败（HTTP ${r.status}）`)
+      retryKind.value = 'solve'
       return
     }
     let result = null
@@ -219,6 +243,7 @@ async function solve() {
   } catch (e) {
     if (e?.name === 'AbortError') store.aiError = '已停止（已断开与 AI 的连接）'
     else store.aiError = '无法连接后端'
+    retryKind.value = 'solve'
   } finally {
     stopAiTimer()
     store.aiBusy = false
@@ -526,7 +551,10 @@ function replaceAllImported() {
       ⚠ 当前内容由 AI 生成，渲染导出前务必逐行自行核对
     </p>
     <LintBar ref="lintBar" @fix-all="() => {}" />
-    <p v-if="store.aiError" class="error">{{ store.aiError }}</p>
+    <p v-if="store.aiError" class="error">
+      {{ store.aiError }}
+      <button v-if="retryKind" class="retry" @click="retryAi">↻ 重试</button>
+    </p>
     <div class="meta">
       行数 {{ lineCount }}
       <span v-if="skipSet.size" class="meta-skip">

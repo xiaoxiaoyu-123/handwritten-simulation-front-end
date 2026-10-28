@@ -137,6 +137,11 @@ function restore(h) {
   store.paper = h.paper
   store.font = h.font
   if (h.chaos) store.chaos = h.chaos
+  // AI 原文一并回填：恢复历史后抽屉还能对照模型原始输出
+  store.aiRaw = h.raw || ''
+  store.aiTex = h.tex || ''
+  store.aiModel = h.model || ''
+  store.aiElapsed = h.elapsed || 0
   store.previewNonce++
 }
 

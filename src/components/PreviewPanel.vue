@@ -199,7 +199,10 @@ const statusText = computed(() => {
       <button class="pagebtn" :disabled="!hasNext || store.previewing"
               @click="nextPage">下一页 ›</button>
     </p>
-    <p v-if="store.previewError" class="error">{{ store.previewError }}</p>
+    <p v-if="store.previewError" class="error">
+      {{ store.previewError }}
+      <button class="retry" @click="refreshNow">↻ 重试</button>
+    </p>
 
     <button class="primary" :disabled="!store.text.trim() || blocked
       || (store.job && !['done', 'failed'].includes(store.job.status))"
@@ -214,6 +217,9 @@ const statusText = computed(() => {
       <a v-if="store.downloadUrl" class="download" :href="store.downloadUrl">⬇ PDF</a>
       <a v-if="store.downloadPngUrl" class="download" :href="store.downloadPngUrl">⬇ PNG</a>
     </div>
-    <p v-if="store.jobError" class="error">{{ store.jobError }}</p>
+    <p v-if="store.jobError" class="error">
+      {{ store.jobError }}
+      <button class="retry" @click="generate">↻ 重试</button>
+    </p>
   </section>
 </template>
