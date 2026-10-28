@@ -29,8 +29,10 @@ export const store = reactive({
   history: [],           // [{ts, text, paper, font}] 最近 10 份
 
   // AI 由站点内置 Key 提供（服务端环境变量），用户无需配置
-  aiBusy: false,
+  aiBusy: false,         // 任一 AI 请求进行中（拍题/解题互斥：单飞锁）
+  aiKind: '',            // 'transcribe' | 'solve'——分开显示"抄题/解题中"
   aiUsed: false,         // 当前文本来自 AI → 显示核对提醒
+  aiPending: null,       // 解题返回时用户已改动编辑区 → {text, problem} 待应用
 })
 
 const HKEY = 'hs_history_v1'

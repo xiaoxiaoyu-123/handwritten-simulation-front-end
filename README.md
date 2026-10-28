@@ -4,7 +4,8 @@
 PDF。配套一个提供 `/api` 的后端服务（FastAPI + 渲染引擎，本仓库不含后端代码）。
 
 **功能一览**：三栏编辑页（素材 / 文本编辑 / 实时预览）· 记号工具条 ·
-记号体检（可一键修复）· AI 拍题抄题与解题 · 潦草度三档 · 字体工坊
+记号体检（可一键修复）· AI 拍题抄题与解题（等待秒数 / 停止 / 不覆盖手动编辑）·
+文档导入（文字版 PDF/Word 直接抽文本，0 token）· 潦草度三档 · 字体工坊
 （手写拍照 → 生成自己的 TTF）· PDF/PNG 导出
 
 > 本仓库可独立部署与二次开发；后端接口约定见下方「后端接口」。
@@ -75,6 +76,7 @@ npm run build    # 产物在 dist/（可挂任意静态站点，/api 反代到�
 | `/api/jobs`、`/api/jobs/{id}` | POST/GET | 导出任务：创建 / 轮询进度 |
 | `/api/jobs/{id}/download` | GET | 下载 PDF / PNG 压缩包 |
 | `/api/lint`、`/api/lint/fix` | POST | 记号体检与一键修复 |
+| `/api/import` | POST | 题目文档导入（PDF/Word 文字版直接抽文本，0 token） |
 | `/api/ai/transcribe`、`/api/ai/solve` | POST | AI 拍题抄题 / 解题（Key 由站点配置） |
 | `/api/papers/upload`、`/api/fonts/upload` | POST | 上传个人纸张 / 字体 |
 | `/api/fontforge/*` | 多个 | 字体工坊流程（模板 / 上传 / 生成） |

@@ -147,6 +147,38 @@ body {
 .editor textarea:focus { border-color: var(--accent); }
 .editor .meta { margin-top: 8px; font-size: 12px; color: var(--muted); }
 .editor .meta-skip { color: #8a6a00; }
+/* AI 等待反馈与停止（P0） */
+.toolbar .stop {
+  background: #fdeeee; border-color: #f0c9c9; color: #a02222;
+}
+.ai-hint { margin: -4px 0 8px; font-size: 12px; color: var(--muted); }
+/* AI 答案待应用横幅（P0：解题不覆盖用户编辑） */
+.pending-box {
+  margin-bottom: 8px; padding: 10px 12px; border-radius: 8px;
+  background: #eef7f0; border: 1px solid #cfe9d8; font-size: 13px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  flex-wrap: wrap;
+}
+.pending-box .pending-tip { color: var(--muted); font-size: 12px; margin-left: 6px; }
+/* 文档导入预览卡（P1） */
+.import-box {
+  margin-bottom: 8px; padding: 10px 12px; border-radius: 8px;
+  background: #f4f7fd; border: 1px solid #d9e3f5; font-size: 13px;
+}
+.import-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.import-head .import-note { color: #147a3d; font-size: 12px; }
+.import-text {
+  margin: 8px 0; max-height: 180px; overflow: auto; padding: 8px;
+  background: #fff; border: 1px solid #e3eaf6; border-radius: 6px;
+  white-space: pre-wrap; word-break: break-all; font-size: 12px; color: #333;
+}
+.import-warn { margin: 4px 0 0; color: #8a6a00; font-size: 12px; }
+.import-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.import-actions button {
+  padding: 4px 12px; font-size: 12px; border: 1px solid #c8d8f8;
+  background: #fff; border-radius: 6px; cursor: pointer; color: #2f6fed;
+}
+.import-actions button.ghost { color: var(--muted); border-color: var(--line); }
 /* 题目原文对照卡 */
 .problem {
   margin-bottom: 8px; padding: 8px 10px; border-radius: 8px;
@@ -168,6 +200,26 @@ body {
 
 /* 预览区 */
 .preview { display: flex; flex-direction: column; }
+.preview-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.preview-head .h-actions { display: flex; align-items: center; gap: 8px; }
+.preview-head .upd { font-size: 12px; color: var(--muted); font-weight: 400; }
+.preview-head .refresh {
+  width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--line);
+  background: #fafbfc; cursor: pointer; font-size: 16px; line-height: 1;
+  color: var(--accent); padding: 0;
+}
+.preview-head .refresh:hover { border-color: var(--accent); }
+.preview-head .refresh:disabled { opacity: 0.5; cursor: default; }
+.preview-head .refresh.spinning { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.preview .page { position: relative; }
+.preview .page .overlay {
+  position: absolute; inset: 0; display: flex; align-items: center;
+  justify-content: center; background: rgba(255, 255, 255, 0.55);
+  font-size: 13px; color: var(--muted); border-radius: 8px;
+}
 .preview .page {
   flex: 1; border: 1px solid var(--line); border-radius: 8px;
   background: #fbfcfe; overflow: auto; min-height: 300px;

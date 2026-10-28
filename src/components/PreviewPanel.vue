@@ -1,9 +1,12 @@
 <script setup>
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { loadHistory, saveHistoryEntry, store } from '../store'
 import { apiFetch } from '../api'
 
 onMounted(loadHistory)
+
+// 手动刷新按钮旁的"更新于 HH:MM:SS"（P0）
+const updatedAt = ref('')
 
 // 体检未通过（有需人工改的问题）时禁止生成，避免吐出带字面量的 PDF
 const blocked = computed(() => (store.lint?.blockers?.length || 0) > 0)
@@ -54,6 +57,7 @@ async function preview() {
       store.previewGeom = data.geom || null
       store.previewError = data.warnings?.length
         ? data.warnings.join('\n') : ''
+      updatedAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
     }
   } catch (e) {
     if (e?.name === 'AbortError' || abortCtl !== ctl) return
@@ -63,11 +67,17 @@ async function preview() {
   }
 }
 
+// 手动刷新：跳过防抖立即重渲染（自动刷新偶发"卡住"时的兜底入口，P0）
+function refreshNow() {
+  if (!store.text.trim() || store.previewing) return
+  clearTimeout(timer)
+  preview()
+}
+
 // 点预览某一行 → 编辑区跳到对应源文本行。
 // 后端给了 first_baseline / line_spacing / rendered_to_src：自动断行时
 // 一条源行会占多条渲染行，映射表把它们折回同一行。
-function jumpToLine(e) {
-  const g = store.previewGeom
+function jumpToLine(e) {  const g = store.previewGeom
   if (!g || !g.line_spacing) return
   const img = e.currentTarget
   const rect = img.getBoundingClientRect()
@@ -142,11 +152,20 @@ const statusText = computed(() => {
 
 <template>
   <section class="panel preview">
-    <h2>实时预览（改动后自动刷新）</h2>
+    <h2 class="preview-head">
+      实时预览（改动后自动刷新）
+      <span class="h-actions">
+        <span v-if="updatedAt" class="upd">更新于 {{ updatedAt }}</span>
+        <button class="refresh" :class="{ spinning: store.previewing }"
+                :disabled="store.previewing || !store.text.trim()"
+                title="手动刷新预览" @click="refreshNow">⟳</button>
+      </span>
+    </h2>
     <div class="page">
       <img v-if="store.previewUrl" :src="store.previewUrl" alt="预览"
            class="clickable" title="点任意一行 → 编辑框跳到对应源文本行"
            @click="jumpToLine" />
+      <div v-if="store.previewing && store.previewUrl" class="overlay">渲染中…</div>
       <p v-else-if="store.previewing" class="placeholder">渲染中…</p>
       <p v-else class="placeholder">
         在左侧输入文本，这里会显示第一页手写效果
