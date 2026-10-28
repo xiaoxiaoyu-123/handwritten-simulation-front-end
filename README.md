@@ -5,8 +5,9 @@ PDF。配套一个提供 `/api` 的后端服务（FastAPI + 渲染引擎，本�
 
 **功能一览**：三栏编辑页（素材 / 文本编辑 / 实时预览）· 记号工具条 ·
 记号体检（可一键修复）· AI 拍题抄题与解题（**流式逐字输出** + 思考过程展示 +
-原文抽屉可复制 + 等待秒数 / 停止 / 不覆盖手动编辑）·
-文档导入（文字版 PDF/Word 直接抽文本，0 token）· 潦草度三档 · 字体工坊
+原文抽屉 **KaTeX 排版显示** + 等待秒数 / 停止 / 不覆盖手动编辑）·
+文档导入（文字版 PDF/Word 直接抽文本 0 token；扫描版 PDF 逐页 AI 识别）·
+**多页预览**（上一页/下一页）· 潦草度三档 · 字体工坊
 （手写拍照 → 生成自己的 TTF）· PDF/PNG 导出
 
 > 本仓库可独立部署与二次开发；后端接口约定见下方「后端接口」。
@@ -78,6 +79,8 @@ npm run build    # 产物在 dist/（可挂任意静态站点，/api 反代到�
 | `/api/jobs/{id}/download` | GET | 下载 PDF / PNG 压缩包 |
 | `/api/lint`、`/api/lint/fix` | POST | 记号体检与一键修复 |
 | `/api/import` | POST | 题目文档导入（PDF/Word 文字版直接抽文本，0 token） |
+| `/api/preview` | POST | 实时预览（`page` 翻页） |
+| `/api/import/visual` | POST | 扫描版 PDF 逐页 AI 识别（NDJSON 流式进度） |
 | `/api/ai/transcribe`、`/api/ai/solve` | POST | AI 拍题抄题 / 解题 |
 | `/api/ai/solve/stream` | POST | 流式解题（NDJSON：meta/delta/reasoning/done/error） |
 | `/api/papers/upload`、`/api/fonts/upload` | POST | 上传个人纸张 / 字体 |

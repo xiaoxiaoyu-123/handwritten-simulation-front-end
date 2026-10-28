@@ -34,6 +34,7 @@ export const store = reactive({
   aiUsed: false,         // 当前文本来自 AI → 显示核对提醒
   aiPending: null,       // 解题返回时用户已改动编辑区 → {text, problem} 待应用
   aiRaw: '',             // 模型原文（流式时逐字累积）→「AI 原文」抽屉展示
+  aiTex: '',             // 原文的 LaTeX 版（done 事件带）→ KaTeX 渲染
   aiReasoning: '',       // 推理模型的思考过程（reasoning 事件累积）
   aiElapsed: 0,          // 本次解题耗时（秒，done 事件带）
   aiModel: '',           // 本次解题用的模型名（仅展示）

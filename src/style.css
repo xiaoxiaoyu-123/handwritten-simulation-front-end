@@ -237,6 +237,19 @@ body {
   justify-content: center; background: rgba(255, 255, 255, 0.55);
   font-size: 13px; color: var(--muted); border-radius: 8px;
 }
+/* 多页翻页条 */
+.pager { display: flex; align-items: center; gap: 10px; }
+.pager .pagebtn {
+  padding: 3px 12px; font-size: 12px; border: 1px solid var(--line);
+  background: #fafbfc; border-radius: 6px; cursor: pointer;
+}
+.pager .pagebtn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.pager .pagebtn:disabled { opacity: 0.45; cursor: default; }
+.pager .pageno { font-size: 12px; color: var(--muted); }
+/* AI 原文 KaTeX 渲染（P2/P3） */
+.katexbox { font-size: 14px; line-height: 2; }
+.katexbox .texline { min-height: 1.6em; }
+.tex-tip { color: var(--muted); font-size: 12px; align-self: center; }
 .preview .page {
   flex: 1; border: 1px solid var(--line); border-radius: 8px;
   background: #fbfcfe; overflow: auto; min-height: 300px;

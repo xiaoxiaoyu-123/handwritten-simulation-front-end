@@ -1,5 +1,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
 import LintBar from './LintBar.vue'
 import { store } from '../store'
 import { apiFetch } from '../api'
@@ -143,7 +145,27 @@ async function transcribe(e) {
   }
 }
 
+// 读取 NDJSON 流式响应，逐事件回调（解题 / 扫描版识别共用）
+async function readNdjson(r, onEvent) {
+  const reader = r.body.getReader()
+  const dec = new TextDecoder()
+  let buf = ''
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buf += dec.decode(value, { stream: true })
+    let idx
+    while ((idx = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, idx).trim()
+      buf = buf.slice(idx + 1)
+      if (!line) continue
+      try { onEvent(JSON.parse(line)) } catch { /* 跳过坏行 */ }
+    }
+  }
+}
+
 // AI 解题：走流式端点（NDJSON），边生成边把原文逐字显示在抽屉里；
+// done 后拿到 tex（记号→LaTeX），抽屉切换成 KaTeX 渲染（DS 网页效果）；
 // 停止 = abort fetch → 后端检测断开 → 取消上游 DeepSeek 请求，不白烧 token
 async function solve() {
   if (!store.text.trim()) {
@@ -156,6 +178,7 @@ async function solve() {
   store.aiKind = 'solve'
   store.aiError = ''
   store.aiRaw = ''
+  store.aiTex = ''
   store.aiReasoning = ''
   store.aiElapsed = 0
   store.aiModel = ''
@@ -173,32 +196,19 @@ async function solve() {
       store.aiError = String(data.detail || `AI 请求失败（HTTP ${r.status}）`)
       return
     }
-    const reader = r.body.getReader()
-    const dec = new TextDecoder()
-    let buf = ''
     let result = null
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buf += dec.decode(value, { stream: true })
-      let idx
-      while ((idx = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, idx).trim()
-        buf = buf.slice(idx + 1)
-        if (!line) continue
-        let ev
-        try { ev = JSON.parse(line) } catch { continue }
-        if (ev.type === 'delta') store.aiRaw += ev.text
-        else if (ev.type === 'reasoning') store.aiReasoning += ev.text
-        else if (ev.type === 'error') store.aiError = ev.message
-        else if (ev.type === 'done') result = ev
-        // meta / ping 忽略
-      }
-    }
+    await readNdjson(r, (ev) => {
+      if (ev.type === 'delta') store.aiRaw += ev.text
+      else if (ev.type === 'reasoning') store.aiReasoning += ev.text
+      else if (ev.type === 'error') store.aiError = ev.message
+      else if (ev.type === 'done') result = ev
+      // meta / ping 忽略
+    })
     if (result?.text) {
       store.aiElapsed = result.elapsed
       store.aiModel = result.model
       store.aiRaw = result.raw
+      store.aiTex = result.tex || ''
       if (store.text === snapshot) {
         applyAiAnswer(result.text, problem)
       } else {
@@ -215,6 +225,25 @@ async function solve() {
     store.aiKind = ''
     aiCtl = null
   }
+}
+
+// ---- AI 原文抽屉：done 后把 LaTeX 逐行交给 KaTeX 渲染（按行缓存）----
+const texLines = computed(() =>
+  store.aiTex ? store.aiTex.split('\n') : [])
+const _katexCache = new Map()
+
+function lineHtml(line) {
+  if (!line) return ''
+  if (_katexCache.has(line)) return _katexCache.get(line)
+  let html
+  try {
+    html = katex.renderToString(line,
+      { throwOnError: false, strict: false, displayMode: false })
+  } catch {
+    html = line.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+  }
+  _katexCache.set(line, html)
+  return html
 }
 
 const copied = ref(false)
@@ -242,10 +271,14 @@ function discardAiPending() {
 }
 
 // ---- 文档导入（P1）：文字版 PDF/DOCX 直接抽文本，0 token ----
+// 扫描版 PDF 走「AI 识别」（P4）：逐页渲染成图交给视觉模型，NDJSON 进度
 const docFile = ref(null)
 const importing = ref(false)
 const importError = ref('')
 const importPreview = ref(null)   // {text, warnings, chars, lines}
+const pendingScanFile = ref(null) // 检测为扫描版的 PDF，等用户确认
+const scanDetail = ref('')
+const visualProgress = ref(null)  // {page, total}
 
 async function importDoc(e) {
   const f = e.target.files[0]
@@ -258,6 +291,12 @@ async function importDoc(e) {
     fd.append('file', f)
     const r = await apiFetch('/api/import', { method: 'POST', body: fd })
     const data = await r.json().catch(() => ({}))
+    if (r.status === 422 && /扫描/.test(String(data.detail || ''))) {
+      // 扫描版：不硬拒，给「AI 识别」入口（每页消耗 1 次 AI 次数）
+      pendingScanFile.value = f
+      scanDetail.value = String(data.detail)
+      return
+    }
     if (!r.ok) {
       importError.value = String(data.detail || `导入失败（HTTP ${r.status}）`)
       return
@@ -268,6 +307,63 @@ async function importDoc(e) {
   } finally {
     importing.value = false
   }
+}
+
+async function startVisualImport() {
+  const f = pendingScanFile.value
+  if (!f || store.aiBusy) return
+  scanDetail.value = ''
+  pendingScanFile.value = null
+  importing.value = true
+  importError.value = ''
+  visualProgress.value = { page: 0, total: 0 }
+  const parts = []
+  store.aiBusy = true
+  store.aiKind = 'import'
+  aiCtl = new AbortController()
+  startAiTimer()
+  try {
+    const fd = new FormData()
+    fd.append('file', f)
+    const r = await apiFetch('/api/import/visual',
+      { method: 'POST', body: fd, signal: aiCtl.signal })
+    if (!r.ok || !r.body) {
+      const data = await r.json().catch(() => ({}))
+      importError.value = String(data.detail || `识别失败（HTTP ${r.status}）`)
+      return
+    }
+    await readNdjson(r, (ev) => {
+      if (ev.type === 'meta') visualProgress.value = { page: 0, total: ev.total }
+      else if (ev.type === 'page') {
+        visualProgress.value = { page: ev.page, total: ev.total }
+        parts.push(ev.text)
+      } else if (ev.type === 'error') importError.value = ev.message
+      else if (ev.type === 'done') {
+        importPreview.value = {
+          text: ev.text,
+          from: 'visual',
+          warnings: [`已用 AI 识别 ${ev.pages} 页扫描件，务必逐行核对`],
+          chars: ev.text.length,
+          lines: ev.text.split('\n').length,
+        }
+      }
+    })
+  } catch (e) {
+    if (e?.name === 'AbortError') importError.value = '已停止（已断开与 AI 的连接）'
+    else importError.value = '无法连接后端'
+  } finally {
+    importing.value = false
+    visualProgress.value = null
+    stopAiTimer()
+    store.aiBusy = false
+    store.aiKind = ''
+    aiCtl = null
+  }
+}
+
+function cancelScanOffer() {
+  pendingScanFile.value = null
+  scanDetail.value = ''
 }
 
 function insertImported() {
@@ -337,7 +433,8 @@ function replaceAllImported() {
       通常 30–90 秒；期间可以继续编辑，答案返回时若文本已改动会先询问再覆盖
     </p>
 
-    <!-- AI 原文抽屉（P2/P3）：流式时逐字出现，仅供阅读核对，永不进 PDF -->
+    <!-- AI 原文抽屉（P2/P3）：流式时逐字出现；done 后 KaTeX 渲染（DS 网页效果）。
+         原文仅供阅读核对，永不进 PDF——编辑区/渲染管线始终吃记号文本 -->
     <details v-if="store.aiRaw || store.aiReasoning" class="rawbox"
              :open="store.aiBusy || undefined">
       <summary>
@@ -348,17 +445,44 @@ function replaceAllImported() {
       </summary>
       <pre v-if="store.aiReasoning" class="reasoning">【思考过程】
 {{ store.aiReasoning }}</pre>
-      <pre class="rawtext">{{ store.aiRaw }}</pre>
+      <div v-if="store.aiTex" class="rawtext katexbox">
+        <div v-for="(line, i) in texLines" :key="i" class="texline"
+             v-html="lineHtml(line)"></div>
+      </div>
+      <pre v-else class="rawtext">{{ store.aiRaw }}</pre>
       <div class="import-actions">
         <button @click="copyRaw">{{ copied ? '✓ 已复制' : '复制原文' }}</button>
+        <span v-if="store.aiTex" class="tex-tip">公式已排版显示；编辑区仍是可直接渲染的记号文本</span>
       </div>
     </details>
+
+    <!-- 扫描版 PDF：确认后逐页 AI 识别（P4，每页 1 次 AI 次数） -->
+    <div v-if="pendingScanFile" class="import-box">
+      <div class="import-head">
+        📄 {{ pendingScanFile.name }}：扫描版 PDF（没有文字层）
+      </div>
+      <p class="import-warn">{{ scanDetail }}</p>
+      <p class="import-warn">
+        可以逐页用 AI 视觉识别：每页消耗 1 次 AI 次数（上限 5 页/次），
+        识别结果出来后请务必逐行核对。
+      </p>
+      <div class="import-actions">
+        <button @click="startVisualImport">开始 AI 识别</button>
+        <button class="ghost" @click="cancelScanOffer">取消</button>
+      </div>
+    </div>
+    <div v-if="visualProgress" class="import-box">
+      <div class="import-head">
+        正在识别第 {{ visualProgress.page }} / {{ visualProgress.total }} 页…
+        <span class="import-note">点上方「✕ 停止」可中断，已识别的页保留</span>
+      </div>
+    </div>
 
     <!-- 文档导入预览：解析完先确认，不直接覆盖编辑区 -->
     <div v-if="importPreview" class="import-box">
       <div class="import-head">
         解析完成：{{ importPreview.chars }} 字 / {{ importPreview.lines }} 行
-        <span class="import-note">文字版直接提取，不消耗 AI 次数</span>
+        <span v-if="importPreview.from !== 'visual'" class="import-note">文字版直接提取，不消耗 AI 次数</span>
       </div>
       <pre class="import-text">{{ importPreview.text.slice(0, 600)
         }}{{ importPreview.text.length > 600 ? '…' : '' }}</pre>

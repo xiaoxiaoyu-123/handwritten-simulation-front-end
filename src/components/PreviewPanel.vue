@@ -5,8 +5,10 @@ import { apiFetch } from '../api'
 
 onMounted(loadHistory)
 
-// 手动刷新按钮旁的"更新于 HH:MM:SS"（P0）
+// 手动刷新按钮旁的"更新于 HH:MM:SS"（P0）+ 多页翻页状态
 const updatedAt = ref('')
+const curPage = ref(1)
+const hasNext = ref(false)
 
 // 体检未通过（有需人工改的问题）时禁止生成，避免吐出带字面量的 PDF
 const blocked = computed(() => (store.lint?.blockers?.length || 0) > 0)
@@ -19,8 +21,10 @@ let timer = null
 watch(() => [store.text, store.paper, store.font, store.chaos,
              store.previewNonce], () => {
   clearTimeout(timer)
+  curPage.value = 1                    // 内容变了回到第 1 页
   if (!store.text.trim()) {
     store.previewUrl = ''
+    hasNext.value = false
     return
   }
   timer = setTimeout(preview, 500)          // 防抖 500ms
@@ -41,7 +45,8 @@ async function preview() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: store.text, paper: store.paper,
-                             font: store.font, chaos: store.chaos }),
+                             font: store.font, chaos: store.chaos,
+                             page: curPage.value }),
       signal: ctl.signal,
     })
     if (!r.ok) {
@@ -58,6 +63,9 @@ async function preview() {
       store.previewError = data.warnings?.length
         ? data.warnings.join('\n') : ''
       updatedAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+      // 后端把超页请求钳到最后一页，页码以它返回的为准
+      curPage.value = data.page || curPage.value
+      hasNext.value = !!data.has_next
     }
   } catch (e) {
     if (e?.name === 'AbortError' || abortCtl !== ctl) return
@@ -67,7 +75,20 @@ async function preview() {
   }
 }
 
-// 手动刷新：跳过防抖立即重渲染（自动刷新偶发"卡住"时的兜底入口，P0）
+// 多页翻页（后端逐页缓存：往回翻秒出，往前翻渲染一页约 3-6 秒）
+function nextPage() {
+  if (!hasNext.value || store.previewing || !store.text.trim()) return
+  curPage.value++
+  preview()
+}
+
+function prevPage() {
+  if (curPage.value <= 1 || store.previewing) return
+  curPage.value--
+  preview()
+}
+
+// 手动刷新：跳过防抖立即重渲染当前页（自动刷新偶发"卡住"时的兜底入口）
 function refreshNow() {
   if (!store.text.trim() || store.previewing) return
   clearTimeout(timer)
@@ -171,8 +192,12 @@ const statusText = computed(() => {
         在左侧输入文本，这里会显示第一页手写效果
       </p>
     </div>
-    <p v-if="store.previewUrl" class="hint-line">
-      提示：点预览里的某一行，左侧编辑框会跳到对应那一行
+    <p v-if="store.previewUrl" class="hint-line pager">
+      <button class="pagebtn" :disabled="curPage <= 1 || store.previewing"
+              @click="prevPage">‹ 上一页</button>
+      <span class="pageno">第 {{ curPage }} 页<span v-if="!hasNext">（末页）</span></span>
+      <button class="pagebtn" :disabled="!hasNext || store.previewing"
+              @click="nextPage">下一页 ›</button>
     </p>
     <p v-if="store.previewError" class="error">{{ store.previewError }}</p>
 
