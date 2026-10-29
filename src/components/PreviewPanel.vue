@@ -188,7 +188,7 @@ const statusText = computed(() => {
            @click="jumpToLine" />
       <div v-if="store.previewing && store.previewUrl" class="overlay">渲染中…</div>
       <p v-else-if="store.previewing" class="placeholder">渲染中…</p>
-      <p v-else class="placeholder">
+      <p v-else-if="!store.previewUrl" class="placeholder">
         在左侧输入文本，这里会显示第一页手写效果
       </p>
     </div>

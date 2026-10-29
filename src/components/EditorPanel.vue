@@ -155,17 +155,30 @@ async function transcribe(e) {
   await transcribeDataUrl(dataUrl)
 }
 
-// 拍题核心（重试按钮复用）：照片 dataURL → 抄题入编辑区
+// 拍题核心（重试按钮复用）：照片 dataURL → 抄题入编辑区。
+// 编辑区已有内容时不直接追加（否则旧题和新拍题会混成一套，AI 会解错题），
+// 改为出预览卡让用户选「插入」或「替换全文」。
 async function transcribeDataUrl(dataUrl) {
   lastPhoto.value = dataUrl
   const data = await callAi('/api/ai/transcribe', { image: dataUrl })
-  if (data?.text) {
-    store.text = (store.text ? store.text + '\n' : '') + data.text
-    store.aiUsed = false          // 抄题不算 AI 作答
-    // 对照用：留下照片与识别出的题文，解题后还能并排核对
-    store.problemImage = dataUrl
-    store.problemText = data.text
+  if (!data?.text) return
+  if (store.text.trim()) {
+    pendingPhoto.value = { text: data.text, image: dataUrl }
+    importPreview.value = {
+      text: data.text, from: 'photo',
+      warnings: ['这是拍题识别结果：编辑区已有内容，请确认后选择「插入」或「替换全文」'],
+      chars: data.text.length, lines: data.text.split('\n').length,
+    }
+    return
   }
+  finishPhotoImport(data.text, dataUrl)
+}
+
+function finishPhotoImport(text, image) {
+  store.text = text
+  store.aiUsed = false          // 抄题不算 AI 作答
+  store.problemImage = image
+  store.problemText = text
 }
 
 // 读取 NDJSON 流式响应，逐事件回调（解题 / 扫描版识别共用）
@@ -300,10 +313,11 @@ function discardAiPending() {
 const docFile = ref(null)
 const importing = ref(false)
 const importError = ref('')
-const importPreview = ref(null)   // {text, warnings, chars, lines}
+const importPreview = ref(null)   // {text, warnings, chars, lines, from?}
 const pendingScanFile = ref(null) // 检测为扫描版的 PDF，等用户确认
 const scanDetail = ref('')
 const visualProgress = ref(null)  // {page, total}
+const pendingPhoto = ref(null)    // 拍题结果待确认：{text, image}
 
 async function importDoc(e) {
   const f = e.target.files[0]
@@ -399,6 +413,7 @@ function insertImported() {
   const e = el?.selectionEnd ?? s
   const pad = store.text && s > 0 && store.text[s - 1] !== '\n' ? '\n' : ''
   store.text = store.text.slice(0, s) + pad + t + '\n' + store.text.slice(e)
+  adoptPendingPhoto()
   importPreview.value = null
 }
 
@@ -406,6 +421,21 @@ function replaceAllImported() {
   const t = importPreview.value?.text
   if (!t) return
   store.text = t
+  adoptPendingPhoto()
+  importPreview.value = null
+}
+
+// 拍题结果被采用后，补上"题目原文/照片"对照栏的数据
+function adoptPendingPhoto() {
+  if (!pendingPhoto.value) return
+  store.problemText = pendingPhoto.value.text
+  store.problemImage = pendingPhoto.value.image
+  store.aiUsed = false
+  pendingPhoto.value = null
+}
+
+function cancelImport() {
+  pendingPhoto.value = null
   importPreview.value = null
 }
 </script>
@@ -507,7 +537,8 @@ function replaceAllImported() {
     <div v-if="importPreview" class="import-box">
       <div class="import-head">
         解析完成：{{ importPreview.chars }} 字 / {{ importPreview.lines }} 行
-        <span v-if="importPreview.from !== 'visual'" class="import-note">文字版直接提取，不消耗 AI 次数</span>
+        <span v-if="!importPreview.from" class="import-note">文字版直接提取，不消耗 AI 次数</span>
+        <span v-else-if="importPreview.from === 'photo'" class="import-note">拍题识别结果（已消耗 1 次 AI 次数）</span>
       </div>
       <pre class="import-text">{{ importPreview.text.slice(0, 600)
         }}{{ importPreview.text.length > 600 ? '…' : '' }}</pre>
@@ -515,7 +546,7 @@ function replaceAllImported() {
       <div class="import-actions">
         <button @click="insertImported">插入到光标处</button>
         <button @click="replaceAllImported">替换全文</button>
-        <button class="ghost" @click="importPreview = null">取消</button>
+        <button class="ghost" @click="cancelImport">取消</button>
       </div>
     </div>
     <p v-if="importError" class="error">{{ importError }}</p>
