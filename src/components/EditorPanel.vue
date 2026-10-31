@@ -68,6 +68,8 @@ const marks = [
   { label: 'lim', title: '极限（过程写在正下方）', tpl: 'lim{}' },
   { label: 'Σ', title: '求和上下限', tpl: 'Σ[,]' },
   { label: '{ }', title: '分段大括号（写在第一分支行）', tpl: '{2 ' },
+  { label: 'mat', title: '矩阵/行列式（分号分行，逗号分列；det() 为行列式）',
+    tpl: 'mat(; ; )' },
 ]
 
 function insert(tpl) {
