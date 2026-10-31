@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { clearHistory, store } from '../store'
+import { clearHistory, createSession, hasContent, switchSession, store }
+  from '../store'
 import { apiFetch } from '../api'
 
 const paperFile = ref(null)
@@ -132,17 +133,19 @@ async function deleteFont(id) {
   store.previewNonce++
 }
 
-function restore(h) {
-  store.text = h.text
-  store.paper = h.paper
-  store.font = h.font
-  if (h.chaos) store.chaos = h.chaos
-  // AI 原文一并回填：恢复历史后抽屉还能对照模型原始输出
-  store.aiRaw = h.raw || ''
-  store.aiTex = h.tex || ''
-  store.aiModel = h.model || ''
-  store.aiElapsed = h.elapsed || 0
-  store.previewNonce++
+// ---- 历史即会话列表（ZCode 式任务切换）----
+// 只显示有内容的会话；解题中/生成中的会话带徽标，点了切过去不打断任务
+const listed = computed(() => store.sessions.filter(hasContent))
+
+function badge(s) {
+  if (s.aiState === 'solving') return '⏳ 解题中'
+  if (s.job && !['done', 'failed'].includes(s.job.status)) return '⏳ 生成中'
+  if (s.aiPending) return '❗ 待应用'
+  return ''
+}
+
+function newOne() {
+  createSession('')
 }
 
 function fmt(ts) {
@@ -210,18 +213,23 @@ function fmt(ts) {
       <p class="hint">上传后会自动生成上标字形，支持指数记法</p>
     </div>
 
-    <h2>历史（本机浏览器保存，最近 10 份）</h2>
+    <h2>历史（本机浏览器保存，最近 12 份）</h2>
     <div class="history">
-      <div v-for="h in store.history" :key="h.ts" class="pick">
-        <button class="hist" :title="h.text.slice(0, 60)"
-                @click="restore(h)">
-          {{ fmt(h.ts) }} · {{ h.text.replace(/\n/g, ' ').slice(0, 14) }}…
+      <button class="ghost new-task" title="开一份新题目，当前内容保留在历史里"
+              @click="newOne">＋ 新建题目</button>
+      <div v-for="s in listed" :key="s.id" class="pick">
+        <button class="hist" :class="{ on: s.id === store.activeId }"
+                :title="s.text.slice(0, 60)" @click="switchSession(s.id)">
+          {{ fmt(s.updatedAt) }} · {{ s.text.replace(/\n/g, ' ').slice(0, 14) }}…
+          <span v-if="badge(s)" class="badge-run">{{ badge(s) }}</span>
         </button>
       </div>
-      <button v-if="store.history.length" class="ghost" @click="clearHistory">
+      <p v-if="!listed.length" class="hint">
+        输入题目后按会话保存，随时点回来；AI 解题中也可以切去看别的
+      </p>
+      <button v-if="listed.length" class="ghost" @click="clearHistory">
         清空历史（一键删除我的数据）
       </button>
-      <p v-else class="hint">还没有历史记录</p>
     </div>
   </aside>
 </template>

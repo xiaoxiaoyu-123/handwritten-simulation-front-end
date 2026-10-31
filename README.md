@@ -31,7 +31,7 @@ PDF。配套一个提供 `/api` 的后端服务（FastAPI + 渲染引擎，本�
 | 构建 | Vite 5 | 开发期 `/api` 代理到后端，见 `vite.config.js` |
 | 状态 | `src/store.js`（`reactive` 单例） | 全站共享状态，体量小不引状态库 |
 | 请求 | `src/api.js`（`apiFetch` 统一入口） | 同源带 Cookie；401/限流等拦截在这扩展 |
-| 本地持久化 | `localStorage` | 最近 10 份文本历史，可一键清空 |
+| 本地持久化 | `localStorage` | 最近 12 份会话（题文 + AI 原文 + 导出状态），可一键清空 |
 | 后端依赖 | FastAPI（另有仓库） | 本仓库只含前端，`dist/` 也可直接挂静态站点 |
 
 ## 项目结构
@@ -39,12 +39,13 @@ PDF。配套一个提供 `/api` 的后端服务（FastAPI + 渲染引擎，本�
 ```
 src/
 ├── main.js                    入口：挂载 #app，引入全局样式
-├── App.vue                    布局骨架：顶栏 + 三栏 + 页脚隐私说明
-├── store.js                   reactive 单例状态 + 历史记录（localStorage）
+├── App.vue                    布局骨架：顶栏（写作业/字体工坊/公告）+ 三栏 + 页脚
+├── store.js                   reactive 单例状态 + 会话列表（ZCode 式任务切换）
 ├── api.js                     apiFetch：统一请求入口（同源带 Cookie）
 ├── style.css                  全部样式（CSS 变量定义主题色）
 └── components/
-    ├── MaterialPanel.vue      素材栏：纸张选择/上传、潦草度、字体、历史
+    ├── MaterialPanel.vue      素材栏：纸张选择/上传、潦草度、字体、历史会话列表
+    ├── AboutPanel.vue         公告页：站点说明、源码入口、反馈渠道、使用须知
     ├── EditorPanel.vue        编辑区：记号工具条、行号栏（跳步标黄/点击跳行）、
     │                          题目原文对照卡、AI 拍题与解题
     ├── LintBar.vue            记号体检条：可修复项一键修、问题行定位、

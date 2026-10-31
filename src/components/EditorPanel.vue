@@ -3,7 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import LintBar from './LintBar.vue'
-import { store } from '../store'
+import { cur, persistNow, store } from '../store'
 import { apiFetch } from '../api'
 
 const ta = ref(null)
@@ -50,6 +50,13 @@ watch(() => store.focusLine, (n) => {
   store.focusLine = 0
 })
 
+// 切换会话：重试按钮的上下文、滚动跟随都跟着新会话重置
+watch(() => store.activeId, () => {
+  retryKind.value = ''
+  followRaw.value = true
+  followReason.value = true
+})
+
 // 记号工具条：点击向光标处插入记号模板，光标落到第一个 } 前
 const marks = [
   { label: 'a/b', title: '堆叠分数', tpl: 'fr{}{}' },
@@ -75,11 +82,12 @@ function insert(tpl) {
   })
 }
 
-async function callAi(path, body) {
+// s = 发起调用时的会话：错误写进它，切走也不串
+async function callAi(path, body, s) {
   if (store.aiBusy) return null          // 单飞锁：解题期间再点拍题/解题直接忽略
   store.aiBusy = true
   store.aiKind = path.endsWith('/transcribe') ? 'transcribe' : 'solve'
-  store.aiError = ''
+  s.aiError = ''
   aiCtl = new AbortController()
   startAiTimer()
   try {
@@ -91,7 +99,7 @@ async function callAi(path, body) {
     })
     const data = await r.json().catch(() => ({}))
     if (!r.ok) {
-      store.aiError = String(data.detail || `AI 请求失败（HTTP ${r.status}）`)
+      s.aiError = String(data.detail || `AI 请求失败（HTTP ${r.status}）`)
       retryKind.value = store.aiKind
       return null
     }
@@ -99,9 +107,9 @@ async function callAi(path, body) {
     return data
   } catch (e) {
     if (e?.name === 'AbortError') {
-      store.aiError = '已停止等待（注意：AI 侧可能已消耗本次额度）'
+      s.aiError = '已停止等待（注意：AI 侧可能已消耗本次额度）'
     } else {
-      store.aiError = '无法连接后端'
+      s.aiError = '无法连接后端'
     }
     retryKind.value = store.aiKind
     return null
@@ -110,6 +118,7 @@ async function callAi(path, body) {
     store.aiBusy = false
     store.aiKind = ''
     aiCtl = null
+    persistNow()
   }
 }
 
@@ -159,8 +168,9 @@ async function transcribe(e) {
 // 编辑区已有内容时不直接追加（否则旧题和新拍题会混成一套，AI 会解错题），
 // 改为出预览卡让用户选「插入」或「替换全文」。
 async function transcribeDataUrl(dataUrl) {
+  const s = cur()
   lastPhoto.value = dataUrl
-  const data = await callAi('/api/ai/transcribe', { image: dataUrl })
+  const data = await callAi('/api/ai/transcribe', { image: dataUrl }, s)
   if (!data?.text) return
   if (store.text.trim()) {
     pendingPhoto.value = { text: data.text, image: dataUrl }
@@ -179,6 +189,7 @@ function finishPhotoImport(text, image) {
   store.aiUsed = false          // 抄题不算 AI 作答
   store.problemImage = image
   store.problemText = text
+  persistNow()
 }
 
 // 读取 NDJSON 流式响应，逐事件回调（解题 / 扫描版识别共用）
@@ -201,25 +212,28 @@ async function readNdjson(r, onEvent) {
 }
 
 // AI 解题：走流式端点（NDJSON），边生成边把原文逐字显示在抽屉里；
-// done 后拿到 tex（记号→LaTeX），抽屉切换成 KaTeX 渲染（DS 网页效果）；
-// 停止 = abort fetch → 后端检测断开 → 取消上游 DeepSeek 请求，不白烧 token
+// 输出写进**发起时的会话对象**——期间切到别的会话查看互不打扰，
+// 切回来原文抽屉/编辑区自动恢复；停止 = abort → 后端取消上游请求
 async function solve() {
-  if (!store.text.trim()) {
-    store.aiError = '先在文本框里放题目（拍照识别或手动粘贴）'
+  const s = cur()
+  if (!s.text.trim()) {
+    s.aiError = '先在文本框里放题目（拍照识别或手动粘贴）'
     return
   }
-  const problem = store.text          // 先存题目原文，供对照栏显示
-  const snapshot = store.text         // 等待期间用户可能继续编辑
+  const problem = s.text          // 题目原文，供对照栏显示
+  const snapshot = s.text         // 解答返回时对比：期间是否改过文本
   store.aiBusy = true
   store.aiKind = 'solve'
-  store.aiError = ''
-  store.aiRaw = ''
-  store.aiTex = ''
-  store.aiReasoning = ''
-  store.aiElapsed = 0
-  store.aiModel = ''
+  s.aiError = ''
+  s.raw = ''
+  s.tex = ''
+  s.reasoning = ''
+  s.elapsed = 0
+  s.model = ''
+  s.aiState = 'solving'
   aiCtl = new AbortController()
   startAiTimer()
+  let result = null
   try {
     const r = await apiFetch('/api/ai/solve/stream', {
       method: 'POST',
@@ -229,39 +243,52 @@ async function solve() {
     })
     if (!r.ok || !r.body) {
       const data = await r.json().catch(() => ({}))
-      store.aiError = String(data.detail || `AI 请求失败（HTTP ${r.status}）`)
+      s.aiError = String(data.detail || `AI 请求失败（HTTP ${r.status}）`)
+      s.aiState = 'error'
       retryKind.value = 'solve'
       return
     }
-    let result = null
     await readNdjson(r, (ev) => {
-      if (ev.type === 'delta') store.aiRaw += ev.text
-      else if (ev.type === 'reasoning') store.aiReasoning += ev.text
-      else if (ev.type === 'error') store.aiError = ev.message
+      if (ev.type === 'delta') s.raw += ev.text
+      else if (ev.type === 'reasoning') s.reasoning += ev.text
+      else if (ev.type === 'error') s.aiError = ev.message
       else if (ev.type === 'done') result = ev
       // meta / ping 忽略
     })
     if (result?.text) {
-      store.aiElapsed = result.elapsed
-      store.aiModel = result.model
-      store.aiRaw = result.raw
-      store.aiTex = result.tex || ''
-      if (store.text === snapshot) {
-        applyAiAnswer(result.text, problem)
+      s.elapsed = result.elapsed
+      s.model = result.model
+      s.raw = result.raw
+      s.tex = result.tex || ''
+      if (cur()?.id === s.id) {
+        if (s.text === snapshot) {
+          applyAiAnswer(result.text, problem)
+        } else {
+          // 等待期间用户改了本会话文本：不覆盖，横幅里等用户决定
+          s.aiPending = { text: result.text, problem }
+        }
       } else {
-        // 等待期间编辑区变了：不覆盖，横幅里等用户决定
-        store.aiPending = { text: result.text, problem }
+        // 没人在看这个会话：直接落位，切回来就是答案
+        s.problemText = problem
+        s.text = result.text
+        s.aiUsed = true
       }
+    } else if (!s.aiError) {
+      s.aiError = 'AI 没有返回内容'
+      s.aiState = 'error'
     }
   } catch (e) {
-    if (e?.name === 'AbortError') store.aiError = '已停止（已断开与 AI 的连接）'
-    else store.aiError = '无法连接后端'
+    if (e?.name === 'AbortError') s.aiError = '已停止（已断开与 AI 的连接）'
+    else s.aiError = '无法连接后端'
+    s.aiState = 'error'
     retryKind.value = 'solve'
   } finally {
+    if (s.aiState === 'solving') s.aiState = s.aiError ? 'error' : 'ready'
     stopAiTimer()
     store.aiBusy = false
     store.aiKind = ''
     aiCtl = null
+    persistNow()
   }
 }
 
@@ -284,6 +311,37 @@ function lineHtml(line) {
   return html
 }
 
+// ---- 抽屉滚动跟随：贴底（距底 <40px）才自动下滚；上翻即停，给"回到最新" ----
+const rawEl = ref(null)
+const reasonEl = ref(null)
+const followRaw = ref(true)
+const followReason = ref(true)
+
+function nearBottom(e) {
+  const el = e.target
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 40
+}
+
+async function stick(el, on) {
+  if (!on || !el) return
+  await nextTick()
+  el.scrollTop = el.scrollHeight
+}
+
+function jumpBottom(el, which) {
+  if (which === 'raw') followRaw.value = true
+  else followReason.value = true
+  if (el) el.scrollTop = el.scrollHeight
+}
+
+watch(() => store.aiRaw, () => stick(rawEl.value, followRaw.value))
+watch(() => store.aiReasoning, () => stick(reasonEl.value, followReason.value))
+// done 后 pre → KaTeX 整块替换：重新建立跟随
+watch(() => store.aiTex, () => {
+  followRaw.value = true
+  stick(rawEl.value, true)
+})
+
 const copied = ref(false)
 
 async function copyRaw() {
@@ -301,6 +359,7 @@ function applyAiAnswer(text, problem) {
   store.text = text
   store.aiUsed = true           // AI 作答 → 显示核对提醒
   store.aiPending = null
+  store.aiState = 'ready'
   nextTick(() => lintBar.value?.runLint())   // AI 返回后立刻体检，别等渲染报错
 }
 
@@ -397,6 +456,7 @@ async function startVisualImport() {
     store.aiBusy = false
     store.aiKind = ''
     aiCtl = null
+    persistNow()
   }
 }
 
@@ -432,6 +492,7 @@ function adoptPendingPhoto() {
   store.problemImage = pendingPhoto.value.image
   store.aiUsed = false
   pendingPhoto.value = null
+  persistNow()
 }
 
 function cancelImport() {
@@ -485,10 +546,12 @@ function cancelImport() {
     </div>
 
     <p v-if="store.aiBusy" class="ai-hint">
-      通常 30–90 秒；期间可以继续编辑，答案返回时若文本已改动会先询问再覆盖
+      通常 30–90 秒；期间可以点左侧历史切到别的题目查看，输出会写进本条会话，
+      切回来即可继续看流式进度
     </p>
 
-    <!-- AI 原文抽屉（P2/P3）：流式时逐字出现；done 后 KaTeX 渲染（DS 网页效果）。
+    <!-- AI 原文抽屉（P2/P3）：外层一起折叠，内层「思考过程 / 解答原文」各自折叠。
+         流式时贴底自动跟随，上翻即停（右下角"↓ 回到最新"）。
          原文仅供阅读核对，永不进 PDF——编辑区/渲染管线始终吃记号文本 -->
     <details v-if="store.aiRaw || store.aiReasoning" class="rawbox"
              :open="store.aiBusy || undefined">
@@ -498,13 +561,34 @@ function cancelImport() {
           ? '生成中…'
           : `模型 ${store.aiModel} · 耗时 ${store.aiElapsed}s` }}</span>
       </summary>
-      <pre v-if="store.aiReasoning" class="reasoning">【思考过程】
-{{ store.aiReasoning }}</pre>
-      <div v-if="store.aiTex" class="rawtext katexbox">
-        <div v-for="(line, i) in texLines" :key="i" class="texline"
-             v-html="lineHtml(line)"></div>
-      </div>
-      <pre v-else class="rawtext">{{ store.aiRaw }}</pre>
+      <details v-if="store.aiReasoning" class="rawsub"
+               :open="store.aiBusy || undefined">
+        <summary>💭 思考过程</summary>
+        <div class="rawwrap">
+          <pre v-if="store.aiReasoning" class="reasoning" ref="reasonEl"
+               @scroll="followReason = nearBottom($event)">{{ store.aiReasoning }}</pre>
+          <button v-if="!followReason" class="to-bottom"
+                  title="回到最新输出" @click="jumpBottom(reasonEl, 'reason')">
+            ↓ 回到最新
+          </button>
+        </div>
+      </details>
+      <details class="rawsub" :open="store.aiBusy || undefined">
+        <summary>✍️ 解答原文</summary>
+        <div class="rawwrap">
+          <pre v-if="!store.aiTex" class="rawtext" ref="rawEl"
+               @scroll="followRaw = nearBottom($event)">{{ store.aiRaw }}</pre>
+          <div v-else class="rawtext katexbox" ref="rawEl"
+               @scroll="followRaw = nearBottom($event)">
+            <div v-for="(line, i) in texLines" :key="i" class="texline"
+                 v-html="lineHtml(line)"></div>
+          </div>
+          <button v-if="!followRaw" class="to-bottom"
+                  title="回到最新输出" @click="jumpBottom(rawEl, 'raw')">
+            ↓ 回到最新
+          </button>
+        </div>
+      </details>
       <div class="import-actions">
         <button @click="copyRaw">{{ copied ? '✓ 已复制' : '复制原文' }}</button>
         <span v-if="store.aiTex" class="tex-tip">公式已排版显示；编辑区仍是可直接渲染的记号文本</span>
@@ -551,7 +635,7 @@ function cancelImport() {
     </div>
     <p v-if="importError" class="error">{{ importError }}</p>
 
-    <!-- AI 答案返回但编辑区已被用户改过：不覆盖，等用户决定 -->
+    <!-- AI 答案返回但本会话文本已被用户改过：不覆盖，等用户决定 -->
     <div v-if="store.aiPending" class="pending-box">
       <div>
         AI 答案已返回——等待期间你改动了文本，没有自动覆盖

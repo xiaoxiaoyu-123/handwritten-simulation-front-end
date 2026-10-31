@@ -1,16 +1,17 @@
 <script setup>
 import { onMounted, ref } from 'vue'
+import AboutPanel from './components/AboutPanel.vue'
 import ForgePanel from './components/ForgePanel.vue'
 import MaterialPanel from './components/MaterialPanel.vue'
 import EditorPanel from './components/EditorPanel.vue'
 import PreviewPanel from './components/PreviewPanel.vue'
-import { loadHistory, store } from './store'
+import { loadSessions, store } from './store'
 
-const view = ref('write')            // write | forge
+const view = ref('write')            // write | forge | about
 const backendOk = ref(false)
 
 onMounted(() => {
-  loadHistory()
+  loadSessions()
   fetch('/api/health').then(r => { backendOk.value = r.ok })
     .catch(() => { backendOk.value = false })
 })
@@ -28,6 +29,7 @@ function useNewFont() {
       <nav class="tabs">
         <button :class="{ on: view === 'write' }" @click="view = 'write'">写作业</button>
         <button :class="{ on: view === 'forge' }" @click="view = 'forge'">字体工坊</button>
+        <button :class="{ on: view === 'about' }" @click="view = 'about'">公告</button>
       </nav>
       <span class="backend-dot" :class="backendOk ? 'ok' : 'down'">
         {{ backendOk ? '后端已连接' : '后端未连接' }}
@@ -36,6 +38,7 @@ function useNewFont() {
     </header>
 
     <ForgePanel v-if="view === 'forge'" @back="useNewFont" />
+    <AboutPanel v-else-if="view === 'about'" />
     <main v-else class="columns">
       <MaterialPanel />
       <EditorPanel />
@@ -43,9 +46,9 @@ function useNewFont() {
     </main>
 
     <footer class="privacy">
-      本工具不保存你的题文与导出文件（任务产物 1 小时后自动删除）；AI 解题由
-      本站提供（每人每天次数有限），题文会发送给 AI 服务商，请勿提交涉密或
-      隐私内容；上传的纸张/字体仅本机可见，可随时删除。
+      本工具不保存你的题文（仅本机浏览器，可随时清空）；导出的 PDF/PNG 在服务器
+      保留 24 小时后自动删除；AI 解题由本站提供（每人每天次数有限），题文会发送
+      给 AI 服务商，请勿提交涉密或隐私内容；上传的纸张/字体仅本机可见，可随时删除。
     </footer>
 
   </div>

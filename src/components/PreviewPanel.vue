@@ -1,14 +1,12 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { loadHistory, saveHistoryEntry, store } from '../store'
+import { cur, loadHistory, persistNow, store } from '../store'
 import { apiFetch } from '../api'
 
 onMounted(loadHistory)
 
-// 手动刷新按钮旁的"更新于 HH:MM:SS"（P0）+ 多页翻页状态
-const updatedAt = ref('')
-const curPage = ref(1)
-const hasNext = ref(false)
+// 手动刷新按钮旁的"更新于 HH:MM:SS"（P0）——预览现场按会话各存一份
+const updatedAt = computed(() => store.previewUpdatedAt)
 
 // 体检未通过（有需人工改的问题）时禁止生成，避免吐出带字面量的 PDF
 const blocked = computed(() => (store.lint?.blockers?.length || 0) > 0)
@@ -17,17 +15,37 @@ const blockReason = computed(() => {
   return n ? `有 ${n} 处记号问题需先修改（见编辑区体检提示）` : ''
 })
 
+// 按行数估算的页数（25 行/页）——只是约数，导出后以任务真实页数为准
+const estPages = computed(() =>
+  Math.max(1, Math.ceil((store.text ? store.text.split('\n').length : 0) / 25)))
+
+// 按钮文案用"约 N 页"：估的是行数，与真实分页（自动断行、纸高）会有出入
+// 旧任务是否过期：生成后文本又改了 → 旧下载链接不再代表当前内容
+const stale = computed(() =>
+  !!(store.job && store.jobForText && store.jobForText !== store.text))
+
+// 预览指纹：同一会话文本/纸/字体/页码没变就不重复请求（切回会话秒显）
+function previewKey(s, page) {
+  return [s.text, store.paper, store.font, store.chaos, page].join('\u0001')
+}
+
 let timer = null
 watch(() => [store.text, store.paper, store.font, store.chaos,
-             store.previewNonce], () => {
+             store.previewNonce, store.activeId], () => {
   clearTimeout(timer)
-  curPage.value = 1                    // 内容变了回到第 1 页
+  const s = cur()
+  if (!s) return
   if (!store.text.trim()) {
-    store.previewUrl = ''
-    hasNext.value = false
+    s.preview.url = ''
+    s.preview.hasNext = false
+    s.preview.key = ''
     return
   }
-  timer = setTimeout(preview, 500)          // 防抖 500ms
+  if (s.preview.key === previewKey(s, s.preview.page) && s.preview.url) {
+    return                     // 显示的就是当前内容（切回会话的现场恢复）
+  }
+  if (s.preview.text !== s.text) s.preview.page = 1   // 内容变了回到第 1 页
+  timer = setTimeout(preview, 500)                    // 防抖 500ms
 })
 
 // 取消上一次预览请求：狂打字时旧的渲染还没回来就被新输入取代，
@@ -35,41 +53,45 @@ watch(() => [store.text, store.paper, store.font, store.chaos,
 let abortCtl = null
 
 async function preview() {
+  const s = cur()
+  if (!s) return
   if (abortCtl) abortCtl.abort()
   const ctl = new AbortController()
   abortCtl = ctl
   store.previewing = true
-  store.previewError = ''
+  s.preview.error = ''
   try {
     const r = await apiFetch('/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: store.text, paper: store.paper,
+      body: JSON.stringify({ text: s.text, paper: store.paper,
                              font: store.font, chaos: store.chaos,
-                             page: curPage.value }),
+                             page: s.preview.page }),
       signal: ctl.signal,
     })
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
       const d = err.detail
-      store.previewError = typeof d === 'object'
+      s.preview.error = typeof d === 'object'
         ? `${d.message}：${(d.details || []).join('；')}`
         : String(d || `预览失败（HTTP ${r.status}）`)
-      store.previewUrl = ''
+      s.preview.url = ''
     } else {
       const data = await r.json()
-      store.previewUrl = data.image
-      store.previewGeom = data.geom || null
-      store.previewError = data.warnings?.length
+      s.preview.url = data.image
+      s.preview.geom = data.geom || null
+      s.preview.error = data.warnings?.length
         ? data.warnings.join('\n') : ''
-      updatedAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+      s.preview.updatedAt = new Date().toLocaleTimeString('zh-CN', { hour12: false })
       // 后端把超页请求钳到最后一页，页码以它返回的为准
-      curPage.value = data.page || curPage.value
-      hasNext.value = !!data.has_next
+      s.preview.page = data.page || s.preview.page
+      s.preview.hasNext = !!data.has_next
+      s.preview.text = s.text
+      s.preview.key = previewKey(s, s.preview.page)
     }
   } catch (e) {
     if (e?.name === 'AbortError' || abortCtl !== ctl) return
-    store.previewError = '无法连接后端'
+    s.preview.error = '无法连接后端'
   } finally {
     if (abortCtl === ctl) store.previewing = false
   }
@@ -77,14 +99,16 @@ async function preview() {
 
 // 多页翻页（后端逐页缓存：往回翻秒出，往前翻渲染一页约 3-6 秒）
 function nextPage() {
-  if (!hasNext.value || store.previewing || !store.text.trim()) return
-  curPage.value++
+  const s = cur()
+  if (!s?.preview.hasNext || store.previewing || !store.text.trim()) return
+  s.preview.page++
   preview()
 }
 
 function prevPage() {
-  if (curPage.value <= 1 || store.previewing) return
-  curPage.value--
+  const s = cur()
+  if (!s || s.preview.page <= 1 || store.previewing) return
+  s.preview.page--
   preview()
 }
 
@@ -112,39 +136,44 @@ function jumpToLine(e) {  const g = store.previewGeom
 }
 
 async function generate() {
-  store.jobError = ''
-  store.downloadUrl = ''
-  store.downloadPngUrl = ''
+  const s = cur()
+  s.jobError = ''
+  s.downloadUrl = ''
+  s.downloadPngUrl = ''
   const r = await apiFetch('/api/jobs', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: store.text, paper: store.paper,
+    body: JSON.stringify({ text: s.text, paper: store.paper,
                            font: store.font, chaos: store.chaos }),
   })
   if (!r.ok) {
     const err = await r.json().catch(() => ({}))
-    store.jobError = String(err.detail || '创建任务失败')
+    s.jobError = String(err.detail || '创建任务失败')
     return
   }
-  store.job = await r.json()
-  saveHistoryEntry()
-  poll()
+  s.job = await r.json()
+  s.jobForText = s.text        // 记下生成时的文本：之后再改就知道"已过期"
+  persistNow()
+  poll(s)
 }
 
-async function poll() {
-  while (store.job && store.job.status !== 'done'
-         && store.job.status !== 'failed') {
+// 轮询写进**发起时的会话**：期间切去别的会话查看，那边照常推进，
+// 历史列表里能看到"生成中…"徽标，切回来进度/下载都在
+async function poll(s) {
+  while (s.job && s.job.status !== 'done'
+         && s.job.status !== 'failed') {
     await new Promise(res => setTimeout(res, 800))
-    const r = await apiFetch(`/api/jobs/${store.job.id}`)
+    const r = await apiFetch(`/api/jobs/${s.job.id}`)
     if (!r.ok) break
-    store.job = await r.json()
+    s.job = await r.json()
   }
-  if (store.job?.status === 'done') {
-    store.downloadUrl = `/api/jobs/${store.job.id}/download`
-    store.downloadPngUrl = `/api/jobs/${store.job.id}/download?format=png`
-  } else if (store.job?.status === 'failed') {
-    store.jobError = store.job.error || '渲染失败'
+  if (s.job?.status === 'done') {
+    s.downloadUrl = `/api/jobs/${s.job.id}/download`
+    s.downloadPngUrl = `/api/jobs/${s.job.id}/download?format=png`
+  } else if (s.job?.status === 'failed') {
+    s.jobError = s.job.error || '渲染失败'
   }
+  persistNow()
 }
 
 const percent = computed(() => {
@@ -193,10 +222,10 @@ const statusText = computed(() => {
       </p>
     </div>
     <p v-if="store.previewUrl" class="hint-line pager">
-      <button class="pagebtn" :disabled="curPage <= 1 || store.previewing"
+      <button class="pagebtn" :disabled="store.previewPage <= 1 || store.previewing"
               @click="prevPage">‹ 上一页</button>
-      <span class="pageno">第 {{ curPage }} 页<span v-if="!hasNext">（末页）</span></span>
-      <button class="pagebtn" :disabled="!hasNext || store.previewing"
+      <span class="pageno">第 {{ store.previewPage }} 页<span v-if="!store.previewHasNext">（末页）</span></span>
+      <button class="pagebtn" :disabled="!store.previewHasNext || store.previewing"
               @click="nextPage">下一页 ›</button>
     </p>
     <p v-if="store.previewError" class="error">
@@ -204,22 +233,34 @@ const statusText = computed(() => {
       <button class="retry" @click="refreshNow">↻ 重试</button>
     </p>
 
-    <button class="primary" :disabled="!store.text.trim() || blocked
-      || (store.job && !['done', 'failed'].includes(store.job.status))"
-      @click="generate">
-      生成（共 {{ Math.max(1, Math.ceil((store.text ? store.text.split('\n').length : 0) / 25)) }} 页）
-    </button>
-    <p v-if="blocked" class="error">{{ blockReason }}</p>
+    <!-- 文本为空时不显示生成/进度/下载区，避免"上一次任务的完成"误导 -->
+    <template v-if="store.text.trim()">
+      <button class="primary" :disabled="blocked
+        || (store.job && !['done', 'failed'].includes(store.job.status))"
+        @click="generate">
+        生成（约 {{ estPages }} 页）
+      </button>
+      <p v-if="blocked" class="error">{{ blockReason }}</p>
 
-    <div class="progress">
-      <div class="bar"><div class="fill" :style="{ width: percent + '%' }"></div></div>
-      <span class="status">{{ statusText }}</span>
-      <a v-if="store.downloadUrl" class="download" :href="store.downloadUrl">⬇ PDF</a>
-      <a v-if="store.downloadPngUrl" class="download" :href="store.downloadPngUrl">⬇ PNG</a>
-    </div>
-    <p v-if="store.jobError" class="error">
-      {{ store.jobError }}
-      <button class="retry" @click="generate">↻ 重试</button>
-    </p>
+      <!-- 生成后文本又改了：旧下载不再代表当前内容，只提示不展示链接 -->
+      <div v-if="stale" class="progress">
+        <span class="status stale-hint">
+          当前文本已改动，尚未生成新版本——需要最新的 PDF 请点上方「生成」
+        </span>
+      </div>
+      <div v-else class="progress">
+        <div class="bar"><div class="fill" :style="{ width: percent + '%' }"></div></div>
+        <span class="status">{{ statusText }}（{{ percent }}%）</span>
+        <a v-if="store.downloadUrl" class="download" :href="store.downloadUrl">⬇ PDF</a>
+        <a v-if="store.downloadPngUrl" class="download" :href="store.downloadPngUrl">⬇ PNG</a>
+        <span v-if="store.downloadUrl" class="dl-hint" title="服务器任务产物保留 24 小时，到期自动删除">
+          24h 内有效
+        </span>
+      </div>
+      <p v-if="store.jobError" class="error">
+        {{ store.jobError }}
+        <button class="retry" @click="generate">↻ 重试</button>
+      </p>
+    </template>
   </section>
 </template>

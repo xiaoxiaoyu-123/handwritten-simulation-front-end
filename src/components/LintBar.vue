@@ -14,6 +14,8 @@ watch(() => store.text, () => {
     store.lint = null
     return
   }
+  // 切回已体检过的会话：结果还在（结果跟随会话保存），不重复请求
+  if (store.lintFor === store.text) return
   timer = setTimeout(runLint, 800)      // 防抖 800ms，不阻塞打字
 })
 
@@ -30,6 +32,7 @@ async function runLint() {
     })
     if (!r.ok) return
     store.lint = await r.json()
+    store.lintFor = store.text
   } catch {
     /* 后端未连接时不打扰用户 */
   }
