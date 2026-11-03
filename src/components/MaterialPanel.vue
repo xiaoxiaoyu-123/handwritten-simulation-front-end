@@ -2,11 +2,15 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { clearHistory, createSession, hasContent, switchSession, store }
   from '../store'
+import { idbAll, idbDelete, idbPut } from '../fontstore'
 import { apiFetch } from '../api'
 
 const paperFile = ref(null)
 const fontFile = ref(null)
 const uploading = ref('')
+const renaming = ref('')            // 正在改名的字体 id
+const renameValue = ref('')
+const restoring = ref('')           // 正在自动补传的字体名
 const calibOpen = ref(false)
 const calib = ref({ ls: 78, top: 213, left: 200 })
 
@@ -17,6 +21,68 @@ onMounted(() => {
 async function refresh() {
   store.papers = await (await apiFetch('/api/papers')).json()
   store.fonts = await (await apiFetch('/api/fonts')).json()
+  restoreMissingFonts()
+}
+
+// 本机 IndexedDB 副本 vs 云端：被 TTL 清理/换服务器时静默补传回来
+async function restoreMissingFonts() {
+  let copies = []
+  try {
+    copies = await idbAll()
+  } catch {
+    return                            // IndexedDB 不可用（隐私模式等）
+  }
+  if (!copies.length) return
+  const cloud = new Set(store.fonts.map(f => f.id))
+  const missing = copies.filter(c => !cloud.has(c.fontId))
+  for (const c of missing) {
+    try {
+      restoring.value = c.name
+      const fd = new FormData()
+      fd.append('file', new File([c.blob], `${c.name}.ttf`,
+                                 { type: 'font/ttf' }))
+      fd.append('restore_id', c.fontId)
+      const r = await apiFetch('/api/fonts/upload',
+                               { method: 'POST', body: fd })
+      if (r.ok) {
+        const data = await r.json()
+        if (data.id !== c.fontId) {
+          // 极少见：服务端没沿用 id → 更新本机映射
+          await idbDelete(c.fontId)
+          await idbPut({ ...c, fontId: data.id })
+        }
+        store.fonts = await (await apiFetch('/api/fonts')).json()
+      } else {
+        await idbDelete(c.fontId)     // 服务端拒绝（损坏/超限）：清掉死副本
+      }
+    } catch {
+      /* 网络失败：下次再试 */
+    } finally {
+      restoring.value = ''
+    }
+  }
+}
+
+async function startRename(f) {
+  renaming.value = f.id
+  renameValue.value = f.name
+}
+
+async function saveRename(f) {
+  const name = renameValue.value.trim()
+  renaming.value = ''
+  if (!name || name === f.name) return
+  const r = await apiFetch(`/api/fonts/${f.id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+  if (r.ok) {
+    f.name = name
+  } else {
+    const data = await r.json().catch(() => ({}))
+    alert(String(data.detail || '改名失败'))
+  }
 }
 
 const selectedUserPaper = computed(() =>
@@ -103,10 +169,10 @@ async function deletePaper(id) {
   store.previewNonce++
 }
 
-async function uploadFont(e) {
+async function uploadFont(e, tag = 'font') {
   const f = e.target.files[0]
   if (!f) return
-  uploading.value = 'font'
+  uploading.value = tag
   const fd = new FormData()
   fd.append('file', f)
   try {
@@ -126,8 +192,9 @@ async function uploadFont(e) {
 }
 
 async function deleteFont(id) {
-  if (!confirm('删除这个字体？')) return
+  if (!confirm('删除这个字体？服务器与本机副本都会一并删除。')) return
   await apiFetch(`/api/fonts/${id}`, { method: 'DELETE' })
+  await idbDelete(id).catch(() => {})
   if (store.font === id) store.font = 'default'
   await refresh()
   store.previewNonce++
@@ -200,11 +267,29 @@ function fmt(ts) {
         <div v-for="f in grp.items" :key="f.id" class="pick">
           <label>
             <input type="radio" name="font" :value="f.id" v-model="store.font" />
-            {{ f.name }}
+            <template v-if="renaming === f.id">
+              <input class="rename" v-model="renameValue" maxlength="30"
+                     @keyup.enter="saveRename(f)"
+                     @keyup.esc="renaming = ''"
+                     @click.stop />
+              <button class="mini" title="保存" @click.stop="saveRename(f)">✓</button>
+            </template>
+            <template v-else>
+              <span class="fname" :title="!f.builtin ? '点击改名' : ''"
+                    @click="!f.builtin && startRename(f)">{{ f.name }}</span>
+            </template>
             <span v-if="f.local" class="badge" title="来自本机手写模拟器，仅本机可见，不分发">本机</span>
+            <span v-if="restoring === f.name" class="badge restoring">补传中…</span>
           </label>
-          <button v-if="!f.builtin" class="mini" title="删除" @click="deleteFont(f.id)">🗑</button>
+          <button v-if="!f.builtin && renaming !== f.id" class="mini"
+                  title="删除（点击名字可改名）" @click="deleteFont(f.id)">🗑</button>
         </div>
+        <label class="upload" :class="{ busy: uploading === 'fontImport' }">
+          <input type="file" accept=".ttf,.otf" hidden
+                 @change="uploadFont($event, 'fontImport')" ref="fontImport" />
+          {{ uploading === 'fontImport' ? '校验生成中…'
+                                       : '⬆ 导入 ttf/otf 文件（换设备迁移）' }}
+        </label>
       </template>
       <label class="upload" :class="{ busy: uploading === 'font' }">
         <input type="file" accept=".ttf,.otf" hidden @change="uploadFont" />
