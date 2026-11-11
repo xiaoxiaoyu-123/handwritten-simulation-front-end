@@ -39,8 +39,12 @@ PDF。配套一个提供 `/api` 的后端服务（FastAPI + 渲染引擎，本�
 ```
 src/
 ├── main.js                    入口：挂载 #app，引入全局样式
-├── App.vue                    布局骨架：顶栏（写作业/字体工坊/公告）+ 三栏 + 页脚
+├── App.vue                    布局骨架：顶栏（五页导航+主题切换）+ RouterView + 页脚
+├── router.js                  vue-router 五页路由（写作业/题库/讲解/工坊/公告）
+├── design-tokens.css          设计 token（学术藏蓝纸感，含暗色模式）
 ├── store.js                   reactive 单例状态 + 会话列表（ZCode 式任务切换）
+├── fontstore.js               IndexedDB 字体本机副本 + client_id 生成
+├── views/                     路由页面：WriteView/LibraryView/AnimView/ForgeView/AboutView
 ├── api.js                     apiFetch：统一请求入口（同源带 Cookie）
 ├── style.css                  全部样式（CSS 变量定义主题色）
 └── components/

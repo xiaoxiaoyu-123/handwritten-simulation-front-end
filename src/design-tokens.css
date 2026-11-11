@@ -1,0 +1,83 @@
+/* ============================================================
+   设计 token —— 手写模拟 · 数学作业学习工作台
+   风格：数学纸感 · 学术藏蓝 + 批注金 · 极简瑞士风
+   来源：design-system/handwritten-sim/MASTER.md（ui-ux-pro-max）
+   规则：组件样式只允许引用 token，不允许写死色值
+   ============================================================ */
+
+:root {
+  /* —— 品牌语义色 —— */
+  --color-primary: #1E3A5F;        /* 学术藏蓝：主按钮/选中/链接（呼应蓝本纸蓝格线） */
+  --color-primary-soft: #E8EEF6;   /* 选中浅底 */
+  --color-on-primary: #FFFFFF;
+  --color-accent: #B45309;         /* 批注金：圈改/重点/纠错（老师批注笔） */
+  --color-accent-soft: #FBF3E4;
+
+  /* —— 界面面层 —— */
+  --color-bg: #F6F8FB;             /* 纸底 */
+  --color-card: #FFFFFF;           /* 卡片/面板 */
+  --color-card-2: #FAFBFD;         /* 次级面：输入框/行号栏/gutter */
+  --color-fg: #16202E;             /* 墨色正文 */
+  --color-fg-soft: #475569;        /* 次级文字 */
+  --color-fg-faint: #8B94A3;       /* 弱文字/占位 */
+  --color-border: #DDE3EC;
+  --color-border-soft: #E9EDF3;
+
+  /* —— 语义状态（底色/文字/描边 三件套） —— */
+  --color-success: #147A3D;      --color-success-soft: #E2F5EA;  --color-success-border: #C4E5D2;
+  --color-warn: #8A6A00;         --color-warn-soft: #FDF3DD;     --color-warn-border: #EAD9A8;
+  --color-danger: #A02222;       --color-danger-soft: #FDEEEE;   --color-danger-border: #F0C9C9;
+  --color-info: #2F6FED;         --color-info-soft: #EEF3FE;     --color-info-border: #C8D8F8;
+  --color-forge: #6B46C1;        --color-forge-soft: #F7F6FD;    --color-forge-border: #E0DBF5;
+
+  /* —— 字体（CJK 策略：系统字体优先，不下载 webfont） —— */
+  --font-ui: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-serif: 'Noto Serif SC', 'Songti SC', 'STSong', 'SimSun', serif;   /* 标题/题面 */
+  --font-hand: 'LXGW WenKai', 'LXGW WenKai Lite', 'Kaiti SC', 'STKaiti', 'KaiTi', serif;  /* 手写点缀·品牌 */
+  --font-mono: ui-monospace, 'Cascadia Code', Consolas, 'Courier New', monospace;
+
+  /* —— 几何 —— */
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --radius-l: 14px;
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.05), 0 4px 12px rgba(15, 23, 42, 0.04);
+  --shadow-pop: 0 2px 8px rgba(15, 23, 42, 0.18);
+
+  /* —— 换页参数（编辑器行高等强约束沿用旧值） —— */
+  --editor-line: 28.5px;
+
+  /* —— 旧变量别名（历史样式平滑过渡，逐步清退） —— */
+  --bg: var(--color-bg);
+  --panel: var(--color-card);
+  --line: var(--color-border);
+  --ink: var(--color-fg);
+  --muted: var(--color-fg-soft);
+  --accent: var(--color-primary);
+}
+
+/* —— 暗色模式（data-theme="dark"，顶栏开关切换） —— */
+[data-theme="dark"] {
+  --color-primary: #7FA8D9;
+  --color-primary-soft: #1C2B42;
+  --color-on-primary: #0B1220;
+  --color-accent: #D9A05B;
+  --color-accent-soft: #33270F;
+
+  --color-bg: #0C1420;
+  --color-card: #141F30;
+  --color-card-2: #182436;
+  --color-fg: #E4EAF2;
+  --color-fg-soft: #A8B3C2;
+  --color-fg-faint: #6E7A8A;
+  --color-border: #263349;
+  --color-border-soft: #1E2A3E;
+
+  --color-success: #5BC489;      --color-success-soft: #12281B;  --color-success-border: #1E3D2B;
+  --color-warn: #E4B95B;         --color-warn-soft: #2E2410;     --color-warn-border: #4A3B16;
+  --color-danger: #E37B7B;       --color-danger-soft: #331A1A;   --color-danger-border: #4A2424;
+  --color-info: #7FA8D9;         --color-info-soft: #16243B;     --color-info-border: #27395C;
+  --color-forge: #B49BE0;        --color-forge-soft: #1E1830;    --color-forge-border: #34294F;
+
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-pop: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
