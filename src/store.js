@@ -42,6 +42,9 @@ export function hasContent(s) {
 }
 
 export const store = reactive({
+  // 动画讲解（阶段 4）：/anim 播放器数据，内存态不落盘（生成只需一键）
+  animSteps: [],         // [{f: LaTeX, t: 中文解说}]
+  animProblem: '',       // 讲解对应的题面（页头展示）
   sessions: [],
   activeId: null,
 

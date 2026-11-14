@@ -2,7 +2,12 @@
 // 个人题库页（RAG v1）：列表/搜索/置信度标签/展开查看/删除。
 // 解答经「双解一致 + sympy 验算」自动校准置信度，无需人工预审。
 import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { store } from '../store'
 import { apiFetch } from '../api'
+
+const vueRouter = useRouter()
+const animLoading = ref('')
 
 const entries = ref([])
 const q = ref('')
@@ -42,6 +47,30 @@ function firstLine(text) {
 
 function copySolution(e) {
   navigator.clipboard.writeText(e.solution).catch(() => {})
+}
+
+async function makeAnim(e) {
+  animLoading.value = e.id
+  try {
+    const r = await apiFetch('/api/ai/explain', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ problem: e.problem, solution: e.solution }),
+    })
+    if (r.ok) {
+      const data = await r.json()
+      store.animSteps = data.steps || []
+      store.animProblem = firstLine(e.problem)
+      vueRouter.push('/anim')
+    } else {
+      const data = await r.json().catch(() => ({}))
+      alert(String(data.detail || '讲解生成失败'))
+    }
+  } catch {
+    alert('讲解生成失败：无法连接后端')
+  } finally {
+    animLoading.value = ''
+  }
 }
 
 function fmt(ts) {
@@ -92,6 +121,9 @@ onMounted(load)
           <pre>{{ e.solution }}</pre>
           <div class="import-actions">
             <button @click="copySolution(e)">复制解答</button>
+            <button :disabled="animLoading === e.id" @click="makeAnim(e)">
+              {{ animLoading === e.id ? '讲解生成中…' : '🎬 动画讲解' }}
+            </button>
             <button class="ghost" @click="del(e)">删除</button>
           </div>
         </div>

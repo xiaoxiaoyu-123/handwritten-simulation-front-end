@@ -5,6 +5,9 @@ import RawDrawer from './RawDrawer.vue'
 import EditorToolbar from './EditorToolbar.vue'
 import { cur, persistNow, store } from '../store'
 import { apiFetch } from '../api'
+import { useRouter } from 'vue-router'
+
+const vueRouter = useRouter()
 
 const ta = ref(null)
 const gutter = ref(null)
@@ -214,6 +217,36 @@ async function solve() {
 function reSolveAi() {
   const s = cur()
   if (s.problemText) doSolve(s.problemText, s, true)
+}
+
+// 动画讲解（2.0 阶段 4）：解答拆成分步 JSON → /anim 播放器
+const explainLoading = ref(false)
+
+async function makeAnim() {
+  const sess = cur()
+  if (!sess.problemText || !store.text.trim()) return
+  explainLoading.value = true
+  try {
+    const r = await apiFetch('/api/ai/explain', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ problem: sess.problemText,
+                             solution: store.text }),
+    })
+    if (r.ok) {
+      const data = await r.json()
+      store.animSteps = data.steps || []
+      store.animProblem = sess.problemText
+      vueRouter.push('/anim')
+    } else {
+      const data = await r.json().catch(() => ({}))
+      sess.aiError = String(data.detail || '讲解生成失败')
+    }
+  } catch {
+    sess.aiError = '讲解生成失败：无法连接后端'
+  } finally {
+    explainLoading.value = false
+  }
 }
 
 // 实际解题：流式端点（Agent 流水线），输出写进**发起时的会话对象**——
@@ -543,6 +576,11 @@ function cancelImport() {
         ⚠ 当前内容由 AI 生成，渲染导出前务必逐行自行核对
         <span v-if="s && s.kbAuto" class="kb-saved">✓ 已自动存入题库（校准中）</span>
       </template>
+      <button v-if="store.aiState === 'ready' && store.problemText
+                     && !explainLoading && !store.aiBusy" class="kb-save"
+              :disabled="explainLoading" @click="makeAnim">
+        {{ explainLoading ? '讲解生成中…' : '🎬 动画讲解' }}
+      </button>
     </p>
     <LintBar ref="lintBar" @fix-all="() => {}" />
     <p v-if="store.aiError" class="error">
