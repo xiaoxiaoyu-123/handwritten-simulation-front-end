@@ -1,5 +1,6 @@
 <script setup>
 // 个人题库页（RAG v1）：列表/搜索/置信度标签/展开查看/删除。
+// 阶段 5：共享到公共题库（仅 L1/L2）/ 公共徽标 / 取消共享。
 // 解答经「双解一致 + sympy 验算」自动校准置信度，无需人工预审。
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -39,6 +40,29 @@ async function del(e) {
   if (!confirm(`从题库删除「${e.title || '这条解答'}」？`)) return
   await apiFetch(`/api/kb/${e.id}`, { method: 'DELETE' })
   await load()
+}
+
+// 共享 / 取消共享到公共题库（后端门禁：仅 L1/L2 允许共享）
+async function toggleShare(e) {
+  const share = e.source !== 'public'
+  if (share && !confirm(
+    '共享到公共题库后，其他用户遇到同题会直接取用这条解答。\n'
+    + '被 2 人纠错会自动下架。确认共享？')) return
+  try {
+    const r = await apiFetch(`/api/kb/${e.id}/share`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ share }),
+    })
+    if (r.ok) {
+      e.source = share ? 'public' : 'private'
+    } else {
+      const data = await r.json().catch(() => ({}))
+      alert(String(data.detail || '操作失败'))
+    }
+  } catch {
+    alert('无法连接后端')
+  }
 }
 
 function firstLine(text) {
@@ -111,6 +135,7 @@ onMounted(load)
             {{ confLabel[e.confidence] || e.confidence }}
           </span>
           <span class="kb-title">{{ firstLine(e.problem) || e.title }}</span>
+          <span v-if="e.source === 'public'" class="kb-pub">公共</span>
           <span class="kb-meta">{{ fmt(e.created) }}</span>
           <span v-if="e.use_count" class="kb-meta">· 用过 {{ e.use_count }} 次</span>
         </div>
@@ -123,6 +148,10 @@ onMounted(load)
             <button @click="copySolution(e)">复制解答</button>
             <button :disabled="animLoading === e.id" @click="makeAnim(e)">
               {{ animLoading === e.id ? '讲解生成中…' : '🎬 动画讲解' }}
+            </button>
+            <button v-if="e.confidence === 'L1' || e.confidence === 'L2'"
+                    @click="toggleShare(e)">
+              {{ e.source === 'public' ? '🔒 取消共享' : '🌐 共享到公共题库' }}
             </button>
             <button class="ghost" @click="del(e)">删除</button>
           </div>

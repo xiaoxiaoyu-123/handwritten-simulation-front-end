@@ -21,6 +21,8 @@ export function newSession(text = '') {
     aiState: 'idle',       // idle | solving | ready | error
     fromKb: false,         // 本条解答来自个人题库（⚡ 标识 + 重新生成入口）
     kbAuto: false,         // 解答已自动存入题库（校准中）
+    kbEntryId: '',         // 题库命中条目 id（纠错报告用）
+    similar: [],           // 题库语义相似题（[{id,title,confidence,sim,source}]）
     aiError: '',
     raw: '', tex: '', reasoning: '',
     model: '', elapsed: 0,

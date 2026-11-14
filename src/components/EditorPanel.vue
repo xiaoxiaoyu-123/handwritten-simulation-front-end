@@ -262,6 +262,8 @@ async function doSolve(problem, s, forceAi = false) {
   s.reasoning = ''
   s.elapsed = 0
   s.model = ''
+  s.kbEntryId = ''
+  s.similar = []
   s.aiState = 'solving'
   aiCtl = new AbortController()
   startAiTimer()
@@ -284,6 +286,7 @@ async function doSolve(problem, s, forceAi = false) {
       if (ev.type === 'delta') s.raw += ev.text
       else if (ev.type === 'reasoning') s.reasoning += ev.text
       else if (ev.type === 'retry') { s.raw = ''; s.reasoning = '' }   // 换备用模型重来
+      else if (ev.type === 'similar') s.similar = ev.items || []       // 相似题参考
       else if (ev.type === 'error') s.aiError = ev.message
       else if (ev.type === 'done') result = ev
       // meta / ping 忽略
@@ -295,6 +298,7 @@ async function doSolve(problem, s, forceAi = false) {
       s.tex = result.tex || ''
       s.fromKb = result.source === 'kb'
       s.kbAuto = result.kb_saved === true && !s.fromKb
+      s.kbEntryId = result.entry_id || ''
       if (cur()?.id === s.id) {
         if (s.text === snapshot) {
           applyAiAnswer(result.text, problem)
@@ -338,6 +342,21 @@ function applyAiAnswer(text, problem) {
 
 function discardAiPending() {
   store.aiPending = null
+}
+
+// 纠错反馈：题库解答有错 → 报告（公共题库计数达 2 自动撤出）
+async function reportKb() {
+  const s = cur()
+  if (!s?.kbEntryId) return
+  try {
+    const r = await apiFetch(`/api/kb/${s.kbEntryId}/report`, { method: 'POST' })
+    if (r.ok) {
+      const d = await r.json().catch(() => ({}))
+      store.aiError = d.source === 'public'
+        ? '🚩 已记录纠错反馈；该解答是公共题库条目，累计 2 次会自动下架'
+        : '🚩 已记录纠错反馈，可到题库页核对该条目'
+    }
+  } catch { /* 静默：报告失败不干扰解题 */ }
 }
 
 // ---- 文档导入（P1）：文字版 PDF/DOCX 直接抽文本，0 token ----
@@ -571,11 +590,19 @@ function cancelImport() {
         ⚡ 本解答来自个人题库（已验算）——想看不同的解法可以重新生成
         <button class="kb-save" :disabled="store.aiBusy"
                 @click="reSolveAi">🔄 重新 AI 解题</button>
+        <button class="kb-save" :disabled="store.aiBusy"
+                @click="reportKb">🚩 报告解答有误</button>
       </template>
       <template v-else>
         ⚠ 当前内容由 AI 生成，渲染导出前务必逐行自行核对
         <span v-if="s && s.kbAuto" class="kb-saved">✓ 已自动存入题库（校准中）</span>
       </template>
+      <span v-if="s && s.similar && s.similar.length" class="kb-similar">
+        📚 题库相似题 {{ s.similar.length }} 条：<span
+          v-for="it in s.similar" :key="it.id" class="similar-item"
+          :title="`相似度 ${(it.sim * 100).toFixed(0)}%`">{{
+            (it.title || '').slice(0, 18) }}（{{ it.confidence === 'L2' ? '已验算' : '双解一致' }}）</span>
+      </span>
       <button v-if="store.aiState === 'ready' && store.problemText
                      && !explainLoading && !store.aiBusy" class="kb-save"
               :disabled="explainLoading" @click="makeAnim">

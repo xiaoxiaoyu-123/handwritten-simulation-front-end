@@ -444,6 +444,7 @@ button.retry:hover { background: var(--color-danger-soft); }
 .kb-conf.c0 { color: var(--color-fg-soft); background: var(--color-border-soft); }
 .kb-conf.c1 { color: var(--color-primary); background: var(--color-primary-soft); }
 .kb-conf.c2 { color: var(--color-success); background: var(--color-success-soft); }
+.kb-pub { font-size: 11px; padding: 1px 8px; border-radius: 999px; flex: none; color: var(--color-accent, #B45309); background: rgba(180, 83, 9, 0.12); }
 .kb-title {
   flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; color: var(--color-fg);
@@ -459,3 +460,7 @@ button.retry:hover { background: var(--color-danger-soft); }
 }
 .kb-empty { padding: 30px 10px; text-align: center; color: var(--color-fg-soft); font-size: 14px; }
 .kb-hit .import-actions button { width: auto; }
+
+/* 相似题提示（解答后非阻断参考） */
+.kb-similar { display: inline-block; margin-left: 10px; font-size: 12px; }
+.similar-item { margin-right: 8px; color: var(--color-fg-soft); }
