@@ -19,6 +19,8 @@ export function newSession(text = '') {
     lintFor: '',           // lint 对应的文本（切会话回来不重复体检）
     // AI 输出（解题/抄题写进发起时的会话，切走不串）
     aiState: 'idle',       // idle | solving | ready | error
+    fromKb: false,         // 本条解答来自个人题库（⚡ 标识 + 重新生成入口）
+    kbAuto: false,         // 解答已自动存入题库（校准中）
     aiError: '',
     raw: '', tex: '', reasoning: '',
     model: '', elapsed: 0,

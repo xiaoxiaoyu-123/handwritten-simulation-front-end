@@ -1,48 +1,101 @@
 <script setup>
-// 题库（RAG）占位壳：阶段 2 填功能（自动收录/检索/置信度标签/公共题库）
-const planned = [
-  { icon: '📥', title: '自动收录', desc: 'AI 解答经独立二解与符号验算校准后，一键存入你的个人题库' },
-  { icon: '⚡', title: '秒取解答', desc: '再遇到相同或相似的题，直接取回已核验的解答，不用等 AI' },
-  { icon: '🏷️', title: '置信度透明', desc: '每条解答带「双解一致 / 已验算」标签，可随时一键纠错下架' },
-]
+// 个人题库页（RAG v1）：列表/搜索/置信度标签/展开查看/删除。
+// 解答经「双解一致 + sympy 验算」自动校准置信度，无需人工预审。
+import { onMounted, ref } from 'vue'
+import { apiFetch } from '../api'
+
+const entries = ref([])
+const q = ref('')
+const loading = ref(false)
+const error = ref('')
+const expanded = ref('')
+
+const confLabel = { L0: '未验证', L1: '双解一致', L2: '已验算' }
+const confClass = { L0: 'c0', L1: 'c1', L2: 'c2' }
+
+async function load() {
+  loading.value = true
+  error.value = ''
+  try {
+    entries.value = await (await apiFetch(
+      `/api/kb/list?q=${encodeURIComponent(q.value)}`)).json()
+  } catch {
+    error.value = '无法连接后端'
+  } finally {
+    loading.value = false
+  }
+}
+
+function toggleExpand(id) {
+  expanded.value = expanded.value === id ? '' : id
+}
+
+async function del(e) {
+  if (!confirm(`从题库删除「${e.title || '这条解答'}」？`)) return
+  await apiFetch(`/api/kb/${e.id}`, { method: 'DELETE' })
+  await load()
+}
+
+function firstLine(text) {
+  return (text || '').split('\n')[0] || ''
+}
+
+function copySolution(e) {
+  navigator.clipboard.writeText(e.solution).catch(() => {})
+}
+
+function fmt(ts) {
+  const d = new Date(ts * 1000)
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+onMounted(load)
 </script>
 
 <template>
   <main class="page-narrow">
-    <section class="panel placeholder-page">
+    <section class="panel kb-page">
       <h2 class="page-title">📚 个人题库</h2>
       <p class="page-sub">
-        解答经校准后沉淀成你的专属题库——下次遇到相同、相似的题，
-        直接取回已核验的解答。
+        AI 解答经「独立二解 + 符号验算」自动校准后沉淀在这里——
+        写作业时遇到相同、相似的题，直接取回已核验的解答。
       </p>
-      <div class="plan-grid">
-        <div v-for="p in planned" :key="p.title" class="plan-card">
-          <span class="plan-icon">{{ p.icon }}</span>
-          <b>{{ p.title }}</b>
-          <p>{{ p.desc }}</p>
+
+      <div class="kb-search">
+        <input type="text" v-model="q" placeholder="搜索题面/解答关键词…"
+               @keyup.enter="load" />
+        <button @click="load">搜索</button>
+      </div>
+
+      <p v-if="error" class="error">{{ error }}</p>
+      <p v-if="loading" class="hint">加载中…</p>
+
+      <div v-if="!loading && !entries.length && !error" class="kb-empty">
+        <p>题库还是空的。</p>
+        <p class="hint">在「写作业」页让 AI 解题后，点「💾 存入题库」，
+          解答会经自动校准沉淀到这里。</p>
+      </div>
+
+      <div v-for="e in entries" :key="e.id" class="kb-entry">
+        <div class="kb-row" @click="toggleExpand(e.id)">
+          <span class="kb-conf" :class="confClass[e.confidence]">
+            {{ confLabel[e.confidence] || e.confidence }}
+          </span>
+          <span class="kb-title">{{ firstLine(e.problem) || e.title }}</span>
+          <span class="kb-meta">{{ fmt(e.created) }}</span>
+          <span v-if="e.use_count" class="kb-meta">· 用过 {{ e.use_count }} 次</span>
+        </div>
+        <div v-if="expanded === e.id" class="kb-detail">
+          <b class="kb-label">题面</b>
+          <pre>{{ e.problem }}</pre>
+          <b class="kb-label">解答</b>
+          <pre>{{ e.solution }}</pre>
+          <div class="import-actions">
+            <button @click="copySolution(e)">复制解答</button>
+            <button class="ghost" @click="del(e)">删除</button>
+          </div>
         </div>
       </div>
-      <p class="dev-note">🚧 该功能正在开发中（阶段 2），完成后这里就是你的题库首页</p>
     </section>
   </main>
 </template>
-
-<style scoped>
-.page-narrow { padding: 20px; max-width: 960px; margin: 0 auto; width: 100%; overflow: auto; }
-.placeholder-page { padding: 28px 32px; }
-.page-title { font-family: var(--font-serif); font-size: 22px; color: var(--color-fg); }
-.page-sub { margin: 10px 0 20px; color: var(--color-fg-soft); line-height: 1.8; font-size: 14px; }
-.plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-.plan-card {
-  border: 1px solid var(--color-border); border-radius: var(--radius-m);
-  padding: 16px; background: var(--color-card-2);
-  display: flex; flex-direction: column; gap: 6px;
-}
-.plan-icon { font-size: 24px; }
-.plan-card b { font-size: 14px; color: var(--color-fg); }
-.plan-card p { font-size: 13px; color: var(--color-fg-soft); line-height: 1.7; }
-.dev-note {
-  margin-top: 20px; padding: 10px 14px; border-radius: var(--radius-m);
-  background: var(--color-warn-soft); color: var(--color-warn); font-size: 13px;
-}
-</style>

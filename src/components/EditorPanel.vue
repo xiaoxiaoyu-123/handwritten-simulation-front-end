@@ -15,6 +15,8 @@ let aiCtl = null            // 进行中 AI 请求的 AbortController（「停�
 const lastPhoto = ref('')   // 最近一次拍题照片（失败重试用）
 const retryKind = ref('')   // 失败的 AI 调用类型（'solve'|'transcribe'）
 
+const s = computed(() => cur())   // 当前会话（模板直接用 s.xxx）
+
 // 行号栏：行数 / 跳步行集合（lint 的 skip_lines 按行号）
 const lineCount = computed(() =>
   store.text ? store.text.split('\n').length : 0)
@@ -198,16 +200,26 @@ async function readNdjson(r, onEvent) {
   }
 }
 
-// AI 解题：走流式端点（NDJSON），边生成边把原文逐字显示在抽屉里；
-// 输出写进**发起时的会话对象**——期间切到别的会话查看互不打扰，
-// 切回来原文抽屉/编辑区自动恢复；停止 = abort → 后端取消上游请求
+// AI 解题主入口：Agent 流水线（查题库命中秒取 / AI 解题 / 失败换模型）
 async function solve() {
   const s = cur()
   if (!s.text.trim()) {
     s.aiError = '先在文本框里放题目（拍照识别或手动粘贴）'
     return
   }
-  const problem = s.text          // 题目原文，供对照栏显示
+  await doSolve(s.text, s, false)
+}
+
+// 重新生成（题库来源时可要求全新的 AI 解答）
+function reSolveAi() {
+  const s = cur()
+  if (s.problemText) doSolve(s.problemText, s, true)
+}
+
+// 实际解题：流式端点（Agent 流水线），输出写进**发起时的会话对象**——
+// 期间切到别的会话查看互不打扰，切回来原文抽屉/编辑区自动恢复；
+// 停止 = abort → 后端取消上游请求
+async function doSolve(problem, s, forceAi = false) {
   const snapshot = s.text         // 解答返回时对比：期间是否改过文本
   store.aiBusy = true
   store.aiKind = 'solve'
@@ -225,7 +237,7 @@ async function solve() {
     const r = await apiFetch('/api/ai/solve/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ problem }),
+      body: JSON.stringify({ problem, force_ai: forceAi }),
       signal: aiCtl.signal,
     })
     if (!r.ok || !r.body) {
@@ -238,6 +250,7 @@ async function solve() {
     await readNdjson(r, (ev) => {
       if (ev.type === 'delta') s.raw += ev.text
       else if (ev.type === 'reasoning') s.reasoning += ev.text
+      else if (ev.type === 'retry') { s.raw = ''; s.reasoning = '' }   // 换备用模型重来
       else if (ev.type === 'error') s.aiError = ev.message
       else if (ev.type === 'done') result = ev
       // meta / ping 忽略
@@ -247,6 +260,8 @@ async function solve() {
       s.model = result.model
       s.raw = result.raw
       s.tex = result.tex || ''
+      s.fromKb = result.source === 'kb'
+      s.kbAuto = result.kb_saved === true && !s.fromKb
       if (cur()?.id === s.id) {
         if (s.text === snapshot) {
           applyAiAnswer(result.text, problem)
@@ -519,7 +534,15 @@ function cancelImport() {
       ></textarea>
     </div>
     <p v-if="store.aiUsed" class="ai-warn">
-      ⚠ 当前内容由 AI 生成，渲染导出前务必逐行自行核对
+      <template v-if="s && s.fromKb">
+        ⚡ 本解答来自个人题库（已验算）——想看不同的解法可以重新生成
+        <button class="kb-save" :disabled="store.aiBusy"
+                @click="reSolveAi">🔄 重新 AI 解题</button>
+      </template>
+      <template v-else>
+        ⚠ 当前内容由 AI 生成，渲染导出前务必逐行自行核对
+        <span v-if="s && s.kbAuto" class="kb-saved">✓ 已自动存入题库（校准中）</span>
+      </template>
     </p>
     <LintBar ref="lintBar" @fix-all="() => {}" />
     <p v-if="store.aiError" class="error">
