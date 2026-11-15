@@ -1,32 +1,24 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import AboutPanel from './components/AboutPanel.vue'
+import ForgePanel from './components/ForgePanel.vue'
+import MaterialPanel from './components/MaterialPanel.vue'
+import EditorPanel from './components/EditorPanel.vue'
+import PreviewPanel from './components/PreviewPanel.vue'
 import { loadSessions, store } from './store'
 
-const route = useRoute()
+const view = ref('write')            // write | forge | about
 const backendOk = ref(false)
-const theme = ref(localStorage.getItem('hs_theme') || 'light')
-
-// 五页导航（2.0 信息架构）；题库/讲解为占位壳
-const tabs = [
-  { to: '/write', label: '写作业' },
-  { to: '/library', label: '题库' },
-  { to: '/anim', label: '讲解' },
-  { to: '/forge', label: '字体工坊' },
-  { to: '/about', label: '公告' },
-]
 
 onMounted(() => {
   loadSessions()
-  document.documentElement.dataset.theme = theme.value
   fetch('/api/health').then(r => { backendOk.value = r.ok })
     .catch(() => { backendOk.value = false })
 })
 
-function toggleTheme() {
-  theme.value = theme.value === 'dark' ? 'light' : 'dark'
-  localStorage.setItem('hs_theme', theme.value)
-  document.documentElement.dataset.theme = theme.value
+function useNewFont() {
+  view.value = 'write'
+  store.previewNonce++
 }
 </script>
 
@@ -35,20 +27,23 @@ function toggleTheme() {
     <header class="topbar">
       <span class="logo">✍️ 手写模拟</span>
       <nav class="tabs">
-        <RouterLink v-for="t in tabs" :key="t.to" :to="t.to"
-                    class="tab" active-class="on">{{ t.label }}</RouterLink>
+        <button :class="{ on: view === 'write' }" @click="view = 'write'">写作业</button>
+        <button :class="{ on: view === 'forge' }" @click="view = 'forge'">字体工坊</button>
+        <button :class="{ on: view === 'about' }" @click="view = 'about'">公告</button>
       </nav>
       <span class="backend-dot" :class="backendOk ? 'ok' : 'down'">
         {{ backendOk ? '后端已连接' : '后端未连接' }}
       </span>
-      <button class="theme-toggle" :title="theme === 'dark' ? '切到亮色' : '切到暗色'"
-              @click="toggleTheme">
-        {{ theme === 'dark' ? '☀️' : '🌙' }}
-      </button>
       <span class="tagline">仅供个人学习演示使用</span>
     </header>
 
-    <RouterView />
+    <ForgePanel v-if="view === 'forge'" @back="useNewFont" />
+    <AboutPanel v-else-if="view === 'about'" />
+    <main v-else class="columns">
+      <MaterialPanel />
+      <EditorPanel />
+      <PreviewPanel />
+    </main>
 
     <footer class="privacy">
       本工具不保存你的题文（仅本机浏览器，可随时清空）；导出的 PDF/PNG 在服务器

@@ -1,24 +1,18 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
 import LintBar from './LintBar.vue'
-import RawDrawer from './RawDrawer.vue'
-import EditorToolbar from './EditorToolbar.vue'
 import { cur, persistNow, store } from '../store'
 import { apiFetch } from '../api'
-import { useRouter } from 'vue-router'
-
-const vueRouter = useRouter()
 
 const ta = ref(null)
 const gutter = ref(null)
 const photoFile = ref(null)
-const docFile = ref(null)
 const lintBar = ref(null)
 let aiCtl = null            // 进行中 AI 请求的 AbortController（「停止」用）
 const lastPhoto = ref('')   // 最近一次拍题照片（失败重试用）
 const retryKind = ref('')   // 失败的 AI 调用类型（'solve'|'transcribe'）
-
-const s = computed(() => cur())   // 当前会话（模板直接用 s.xxx）
 
 // 行号栏：行数 / 跳步行集合（lint 的 skip_lines 按行号）
 const lineCount = computed(() =>
@@ -56,12 +50,28 @@ watch(() => store.focusLine, (n) => {
   store.focusLine = 0
 })
 
-// 切换会话：重试按钮的上下文跟着新会话重置（抽屉跟随态在 RawDrawer 内自管）
+// 切换会话：重试按钮的上下文、滚动跟随都跟着新会话重置
 watch(() => store.activeId, () => {
   retryKind.value = ''
+  followRaw.value = true
+  followReason.value = true
 })
 
-// 记号插入：工具条 emit 过来，光标落到第一个 } 前
+// 记号工具条：点击向光标处插入记号模板，光标落到第一个 } 前
+const marks = [
+  { label: 'a/b', title: '堆叠分数', tpl: 'fr{}{}' },
+  { label: '√', title: '根号', tpl: '√()' },
+  { label: '∫', title: '积分上下限', tpl: '∫[,]' },
+  { label: 'xᵧ', title: '下标', tpl: 'sb{}{}' },
+  { label: '∂', title: '偏导', tpl: 'pd{}' },
+  { label: 'x̄', title: '上划线', tpl: 'ov{}' },
+  { label: 'lim', title: '极限（过程写在正下方）', tpl: 'lim{}' },
+  { label: 'Σ', title: '求和上下限', tpl: 'Σ[,]' },
+  { label: '{ }', title: '分段大括号（写在第一分支行）', tpl: '{2 ' },
+  { label: 'mat', title: '矩阵/行列式（分号分行，逗号分列；det() 为行列式）',
+    tpl: 'mat(; ; )' },
+]
+
 function insert(tpl) {
   const el = ta.value
   const s = el?.selectionStart ?? store.text.length
@@ -203,56 +213,16 @@ async function readNdjson(r, onEvent) {
   }
 }
 
-// AI 解题主入口：Agent 流水线（查题库命中秒取 / AI 解题 / 失败换模型）
+// AI 解题：走流式端点（NDJSON），边生成边把原文逐字显示在抽屉里；
+// 输出写进**发起时的会话对象**——期间切到别的会话查看互不打扰，
+// 切回来原文抽屉/编辑区自动恢复；停止 = abort → 后端取消上游请求
 async function solve() {
   const s = cur()
   if (!s.text.trim()) {
     s.aiError = '先在文本框里放题目（拍照识别或手动粘贴）'
     return
   }
-  await doSolve(s.text, s, false)
-}
-
-// 重新生成（题库来源时可要求全新的 AI 解答）
-function reSolveAi() {
-  const s = cur()
-  if (s.problemText) doSolve(s.problemText, s, true)
-}
-
-// 动画讲解（2.0 阶段 4）：解答拆成分步 JSON → /anim 播放器
-const explainLoading = ref(false)
-
-async function makeAnim() {
-  const sess = cur()
-  if (!sess.problemText || !store.text.trim()) return
-  explainLoading.value = true
-  try {
-    const r = await apiFetch('/api/ai/explain', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ problem: sess.problemText,
-                             solution: store.text }),
-    })
-    if (r.ok) {
-      const data = await r.json()
-      store.animSteps = data.steps || []
-      store.animProblem = sess.problemText
-      vueRouter.push('/anim')
-    } else {
-      const data = await r.json().catch(() => ({}))
-      sess.aiError = String(data.detail || '讲解生成失败')
-    }
-  } catch {
-    sess.aiError = '讲解生成失败：无法连接后端'
-  } finally {
-    explainLoading.value = false
-  }
-}
-
-// 实际解题：流式端点（Agent 流水线），输出写进**发起时的会话对象**——
-// 期间切到别的会话查看互不打扰，切回来原文抽屉/编辑区自动恢复；
-// 停止 = abort → 后端取消上游请求
-async function doSolve(problem, s, forceAi = false) {
+  const problem = s.text          // 题目原文，供对照栏显示
   const snapshot = s.text         // 解答返回时对比：期间是否改过文本
   store.aiBusy = true
   store.aiKind = 'solve'
@@ -262,8 +232,6 @@ async function doSolve(problem, s, forceAi = false) {
   s.reasoning = ''
   s.elapsed = 0
   s.model = ''
-  s.kbEntryId = ''
-  s.similar = []
   s.aiState = 'solving'
   aiCtl = new AbortController()
   startAiTimer()
@@ -272,7 +240,7 @@ async function doSolve(problem, s, forceAi = false) {
     const r = await apiFetch('/api/ai/solve/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ problem, force_ai: forceAi }),
+      body: JSON.stringify({ problem }),
       signal: aiCtl.signal,
     })
     if (!r.ok || !r.body) {
@@ -285,8 +253,6 @@ async function doSolve(problem, s, forceAi = false) {
     await readNdjson(r, (ev) => {
       if (ev.type === 'delta') s.raw += ev.text
       else if (ev.type === 'reasoning') s.reasoning += ev.text
-      else if (ev.type === 'retry') { s.raw = ''; s.reasoning = '' }   // 换备用模型重来
-      else if (ev.type === 'similar') s.similar = ev.items || []       // 相似题参考
       else if (ev.type === 'error') s.aiError = ev.message
       else if (ev.type === 'done') result = ev
       // meta / ping 忽略
@@ -296,9 +262,6 @@ async function doSolve(problem, s, forceAi = false) {
       s.model = result.model
       s.raw = result.raw
       s.tex = result.tex || ''
-      s.fromKb = result.source === 'kb'
-      s.kbAuto = result.kb_saved === true && !s.fromKb
-      s.kbEntryId = result.entry_id || ''
       if (cur()?.id === s.id) {
         if (s.text === snapshot) {
           applyAiAnswer(result.text, problem)
@@ -331,6 +294,68 @@ async function doSolve(problem, s, forceAi = false) {
   }
 }
 
+// ---- AI 原文抽屉：done 后把 LaTeX 逐行交给 KaTeX 渲染（按行缓存）----
+const texLines = computed(() =>
+  store.aiTex ? store.aiTex.split('\n') : [])
+const _katexCache = new Map()
+
+function lineHtml(line) {
+  if (!line) return ''
+  if (_katexCache.has(line)) return _katexCache.get(line)
+  let html
+  try {
+    html = katex.renderToString(line,
+      { throwOnError: false, strict: false, displayMode: false })
+  } catch {
+    html = line.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+  }
+  _katexCache.set(line, html)
+  return html
+}
+
+// ---- 抽屉滚动跟随：贴底（距底 <40px）才自动下滚；上翻即停，给"回到最新" ----
+const rawEl = ref(null)
+const reasonEl = ref(null)
+const followRaw = ref(true)
+const followReason = ref(true)
+
+function nearBottom(e) {
+  const el = e.target
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 40
+}
+
+async function stick(el, on) {
+  if (!on || !el) return
+  await nextTick()
+  el.scrollTop = el.scrollHeight
+}
+
+function jumpBottom(el, which) {
+  if (which === 'raw') followRaw.value = true
+  else followReason.value = true
+  if (el) el.scrollTop = el.scrollHeight
+}
+
+watch(() => store.aiRaw, () => stick(rawEl.value, followRaw.value))
+watch(() => store.aiReasoning, () => stick(reasonEl.value, followReason.value))
+// done 后 pre → KaTeX 整块替换：重新建立跟随
+watch(() => store.aiTex, () => {
+  followRaw.value = true
+  stick(rawEl.value, true)
+})
+
+const copied = ref(false)
+
+async function copyRaw() {
+  try {
+    await navigator.clipboard.writeText(
+      (store.aiReasoning ? `【思考过程】\n${store.aiReasoning}\n\n` : '')
+      + (store.aiRaw || ''))
+    copied.value = true
+    setTimeout(() => { copied.value = false }, 1500)
+  } catch { /* 剪贴板不可用时静默 */ }
+}
+
 function applyAiAnswer(text, problem) {
   store.problemText = problem
   store.text = text
@@ -344,23 +369,9 @@ function discardAiPending() {
   store.aiPending = null
 }
 
-// 纠错反馈：题库解答有错 → 报告（公共题库计数达 2 自动撤出）
-async function reportKb() {
-  const s = cur()
-  if (!s?.kbEntryId) return
-  try {
-    const r = await apiFetch(`/api/kb/${s.kbEntryId}/report`, { method: 'POST' })
-    if (r.ok) {
-      const d = await r.json().catch(() => ({}))
-      store.aiError = d.source === 'public'
-        ? '🚩 已记录纠错反馈；该解答是公共题库条目，累计 2 次会自动下架'
-        : '🚩 已记录纠错反馈，可到题库页核对该条目'
-    }
-  } catch { /* 静默：报告失败不干扰解题 */ }
-}
-
 // ---- 文档导入（P1）：文字版 PDF/DOCX 直接抽文本，0 token ----
 // 扫描版 PDF 走「AI 识别」（P4）：逐页渲染成图交给视觉模型，NDJSON 进度
+const docFile = ref(null)
 const importing = ref(false)
 const importError = ref('')
 const importPreview = ref(null)   // {text, warnings, chars, lines, from?}
@@ -503,20 +514,88 @@ function cancelImport() {
       <pre v-if="store.problemText">{{ store.problemText }}</pre>
     </details>
 
-    <EditorToolbar :ai-elapsed="aiElapsed" :importing="importing"
-                   @insert="insert" @photo="photoFile.click()"
-                   @import="docFile.click()" @solve="solve" @stop="stopAi" />
-    <input type="file" accept="image/png,image/jpeg,image/webp" hidden
-           ref="photoFile" @change="transcribe" />
-    <input type="file" accept=".pdf,.docx" hidden
-           ref="docFile" @change="importDoc" />
+    <div class="toolbar">
+      <button v-for="m in marks" :key="m.tpl" :title="m.title + '：' + m.tpl"
+              @click="insert(m.tpl)">
+        {{ m.label }}
+      </button>
+      <span class="sep"></span>
+      <button class="ai" title="拍题目照片，AI 抄成文字"
+              :disabled="store.aiBusy || importing"
+              @click="photoFile.click()">
+        {{ store.aiBusy && store.aiKind === 'transcribe'
+          ? `正在抄题… ${aiElapsed}s` : '📷 拍题' }}
+      </button>
+      <input type="file" accept="image/png,image/jpeg,image/webp" hidden
+             ref="photoFile" @change="transcribe" />
+      <button class="ai" title="上传文字版 PDF / Word 文档，直接提取文字（不消耗 AI 次数）"
+              :disabled="store.aiBusy || importing" @click="docFile.click()">
+        {{ importing ? '解析中…' : '📄 导入' }}
+      </button>
+      <input type="file" accept=".pdf,.docx" hidden
+             ref="docFile" @change="importDoc" />
+      <button class="ai" title="AI 按本站记号规范写答案（务必自行核对）"
+              :disabled="store.aiBusy || importing" @click="solve">
+        {{ store.aiBusy && store.aiKind === 'solve'
+          ? `正在解题… ${aiElapsed}s` : '🤖 AI 解题' }}
+      </button>
+      <button v-if="store.aiBusy" class="stop" @click="stopAi"
+              title="不再等待结果（AI 侧可能已消耗本次额度）">
+        ✕ 停止
+      </button>
+      <a class="cheatsheet" href="https://github.com/xiaoxiaoyu-123/handwritten-simulation-front-end#支持的记号"
+         target="_blank">记号速查 ↗</a>
+    </div>
 
     <p v-if="store.aiBusy" class="ai-hint">
       通常 30–90 秒；期间可以点左侧历史切到别的题目查看，输出会写进本条会话，
       切回来即可继续看流式进度
     </p>
 
-    <RawDrawer />
+    <!-- AI 原文抽屉（P2/P3）：外层一起折叠，内层「思考过程 / 解答原文」各自折叠。
+         流式时贴底自动跟随，上翻即停（右下角"↓ 回到最新"）。
+         原文仅供阅读核对，永不进 PDF——编辑区/渲染管线始终吃记号文本 -->
+    <details v-if="store.aiRaw || store.aiReasoning" class="rawbox"
+             :open="store.aiBusy || undefined">
+      <summary>
+        📄 AI 原文（模型原始输出，仅供核对）
+        <span class="tip">{{ store.aiBusy
+          ? '生成中…'
+          : `模型 ${store.aiModel} · 耗时 ${store.aiElapsed}s` }}</span>
+      </summary>
+      <details v-if="store.aiReasoning" class="rawsub"
+               :open="store.aiBusy || undefined">
+        <summary>💭 思考过程</summary>
+        <div class="rawwrap">
+          <pre v-if="store.aiReasoning" class="reasoning" ref="reasonEl"
+               @scroll="followReason = nearBottom($event)">{{ store.aiReasoning }}</pre>
+          <button v-if="!followReason" class="to-bottom"
+                  title="回到最新输出" @click="jumpBottom(reasonEl, 'reason')">
+            ↓ 回到最新
+          </button>
+        </div>
+      </details>
+      <details class="rawsub" :open="store.aiBusy || undefined">
+        <summary>✍️ 解答原文</summary>
+        <div class="rawwrap">
+          <pre v-if="!store.aiTex" class="rawtext" ref="rawEl"
+               @scroll="followRaw = nearBottom($event)">{{ store.aiRaw }}</pre>
+          <div v-else class="rawtext katexbox" ref="rawEl"
+               @scroll="followRaw = nearBottom($event)">
+            <div v-for="(line, i) in texLines" :key="i" class="texline"
+                 v-html="lineHtml(line)"></div>
+          </div>
+          <button v-if="!followRaw" class="to-bottom"
+                  title="回到最新输出" @click="jumpBottom(rawEl, 'raw')">
+            ↓ 回到最新
+          </button>
+        </div>
+      </details>
+      <div class="import-actions">
+        <button @click="copyRaw">{{ copied ? '✓ 已复制' : '复制原文' }}</button>
+        <span v-if="store.aiTex" class="tex-tip">公式已排版显示；编辑区仍是可直接渲染的记号文本</span>
+      </div>
+    </details>
 
     <!-- 扫描版 PDF：确认后逐页 AI 识别（P4，每页 1 次 AI 次数） -->
     <div v-if="pendingScanFile" class="import-box">
@@ -582,32 +661,11 @@ function cancelImport() {
              @click="focusLine(n)">{{ n }}</div>
       </div>
       <textarea ref="ta" v-model="store.text" @scroll="syncScroll"
-        placeholder="在这里输入或粘贴作业文本…&#10;支持记号：fr{分子}{分母}、√(...)、∫[下,上]、sb{底}{下标}、lim{过程}、Σ[下,上]、mat(行;行) 等&#10;指数写 ^ 记法：e^(-jωt)、x^(n+1)&#10;也可以📷拍题让 AI 抄题、🤖让 AI 解题"
+        placeholder="在这里输入或粘贴作业文本…&#10;支持记号：fr{分子}{分母}、√(...)、∫[下,上]、sb{底}{下标}、lim{过程}、Σ[下,上] 等&#10;指数写 ^ 记法：e^(-jωt)、x^(n+1)&#10;也可以📷拍题让 AI 抄题、🤖让 AI 解题"
       ></textarea>
     </div>
     <p v-if="store.aiUsed" class="ai-warn">
-      <template v-if="s && s.fromKb">
-        ⚡ 本解答来自个人题库（已验算）——想看不同的解法可以重新生成
-        <button class="kb-save" :disabled="store.aiBusy"
-                @click="reSolveAi">🔄 重新 AI 解题</button>
-        <button class="kb-save" :disabled="store.aiBusy"
-                @click="reportKb">🚩 报告解答有误</button>
-      </template>
-      <template v-else>
-        ⚠ 当前内容由 AI 生成，渲染导出前务必逐行自行核对
-        <span v-if="s && s.kbAuto" class="kb-saved">✓ 已自动存入题库（校准中）</span>
-      </template>
-      <span v-if="s && s.similar && s.similar.length" class="kb-similar">
-        📚 题库相似题 {{ s.similar.length }} 条：<span
-          v-for="it in s.similar" :key="it.id" class="similar-item"
-          :title="`相似度 ${(it.sim * 100).toFixed(0)}%`">{{
-            (it.title || '').slice(0, 18) }}（{{ it.confidence === 'L2' ? '已验算' : '双解一致' }}）</span>
-      </span>
-      <button v-if="store.aiState === 'ready' && store.problemText
-                     && !explainLoading && !store.aiBusy" class="kb-save"
-              :disabled="explainLoading" @click="makeAnim">
-        {{ explainLoading ? '讲解生成中…' : '🎬 动画讲解' }}
-      </button>
+      ⚠ 当前内容由 AI 生成，渲染导出前务必逐行自行核对
     </p>
     <LintBar ref="lintBar" @fix-all="() => {}" />
     <p v-if="store.aiError" class="error">

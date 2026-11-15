@@ -19,10 +19,6 @@ export function newSession(text = '') {
     lintFor: '',           // lint 对应的文本（切会话回来不重复体检）
     // AI 输出（解题/抄题写进发起时的会话，切走不串）
     aiState: 'idle',       // idle | solving | ready | error
-    fromKb: false,         // 本条解答来自个人题库（⚡ 标识 + 重新生成入口）
-    kbAuto: false,         // 解答已自动存入题库（校准中）
-    kbEntryId: '',         // 题库命中条目 id（纠错报告用）
-    similar: [],           // 题库语义相似题（[{id,title,confidence,sim,source}]）
     aiError: '',
     raw: '', tex: '', reasoning: '',
     model: '', elapsed: 0,
@@ -44,9 +40,6 @@ export function hasContent(s) {
 }
 
 export const store = reactive({
-  // 动画讲解（阶段 4）：/anim 播放器数据，内存态不落盘（生成只需一键）
-  animSteps: [],         // [{f: LaTeX, t: 中文解说}]
-  animProblem: '',       // 讲解对应的题面（页头展示）
   sessions: [],
   activeId: null,
 
