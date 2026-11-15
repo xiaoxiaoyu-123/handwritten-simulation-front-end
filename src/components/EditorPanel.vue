@@ -14,6 +14,29 @@ let aiCtl = null            // 进行中 AI 请求的 AbortController（「停�
 const lastPhoto = ref('')   // 最近一次拍题照片（失败重试用）
 const retryKind = ref('')   // 失败的 AI 调用类型（'solve'|'transcribe'）
 
+// 记号速查浮层（站内，替代外跳 GitHub；内容与上方插入按钮一一对应）
+const cheatOpen = ref(false)
+const cheatRows = [
+  { n: 'fr{分子}{分母}', d: '堆叠分数' },
+  { n: '√(...)', d: '根号' },
+  { n: '∫[下,上]', d: '积分上下限' },
+  { n: 'sb{底}{下标}', d: '下标' },
+  { n: 'pd{...}', d: '偏导' },
+  { n: 'ov{...}', d: '上划线' },
+  { n: 'lim{过程}', d: '极限（过程写正下方）' },
+  { n: 'Σ[下,上]', d: '求和上下限' },
+  { n: '{2', d: '分段大括号（写在第一分支行）' },
+  { n: 'mat(行;行)', d: '矩阵（列按空格自然排布）' },
+]
+function closeCheat() {
+  cheatOpen.value = false
+  document.removeEventListener('click', closeCheat)
+}
+watch(cheatOpen, v => {
+  if (v) setTimeout(() => document.addEventListener('click', closeCheat), 0)
+  else document.removeEventListener('click', closeCheat)
+})
+
 // 行号栏：行数 / 跳步行集合（lint 的 skip_lines 按行号）
 const lineCount = computed(() =>
   store.text ? store.text.split('\n').length : 0)
@@ -543,13 +566,19 @@ function cancelImport() {
               title="不再等待结果（AI 侧可能已消耗本次额度）">
         ✕ 停止
       </button>
-      <a class="cheatsheet" href="https://github.com/xiaoxiaoyu-123/handwritten-simulation-front-end#支持的记号"
-         target="_blank">记号速查 ↗</a>
+      <span class="cheatsheet-wrap" @click.stop>
+        <button class="cheatsheet" @click="cheatOpen = !cheatOpen">记号速查</button>
+        <div v-if="cheatOpen" class="cheat-pop">
+          <div v-for="row in cheatRows" :key="row.n" class="cheat-row">
+            <code>{{ row.n }}</code><span>{{ row.d }}</span>
+          </div>
+          <p class="cheat-tip">指数写 ^ 记法：x^(n+1)、e^(-jωt)；点击上方按钮可快速插入</p>
+        </div>
+      </span>
     </div>
 
     <p v-if="store.aiBusy" class="ai-hint">
-      通常 30–90 秒；期间可以点左侧历史切到别的题目查看，输出会写进本条会话，
-      切回来即可继续看流式进度
+      解题中（约 30–90 秒）· 可随时切去左侧历史，回来继续看
     </p>
 
     <!-- AI 原文抽屉（P2/P3）：外层一起折叠，内层「思考过程 / 解答原文」各自折叠。
@@ -593,7 +622,7 @@ function cancelImport() {
       </details>
       <div class="import-actions">
         <button @click="copyRaw">{{ copied ? '✓ 已复制' : '复制原文' }}</button>
-        <span v-if="store.aiTex" class="tex-tip">公式已排版显示；编辑区仍是可直接渲染的记号文本</span>
+        <span v-if="store.aiTex" class="tex-tip">AI 返回的公式排版预览</span>
       </div>
     </details>
 
@@ -661,7 +690,7 @@ function cancelImport() {
              @click="focusLine(n)">{{ n }}</div>
       </div>
       <textarea ref="ta" v-model="store.text" @scroll="syncScroll"
-        placeholder="在这里输入或粘贴作业文本…&#10;支持记号：fr{分子}{分母}、√(...)、∫[下,上]、sb{底}{下标}、lim{过程}、Σ[下,上] 等&#10;指数写 ^ 记法：e^(-jωt)、x^(n+1)&#10;也可以📷拍题让 AI 抄题、🤖让 AI 解题"
+        placeholder="输入或粘贴作业文本…&#10;支持 fr{}{} 分数、√() 根号、∫[,] 积分、mat(; ;) 矩阵 等记号——点右上「记号速查」查看全部"
       ></textarea>
     </div>
     <p v-if="store.aiUsed" class="ai-warn">

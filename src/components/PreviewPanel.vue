@@ -253,18 +253,15 @@ const statusText = computed(() => {
 
       <!-- 生成后文本又改了：旧下载不再代表当前内容，只提示不展示链接 -->
       <div v-if="stale" class="progress">
-        <span class="status stale-hint">
-          当前文本已改动，尚未生成新版本——需要最新的 PDF 请点上方「生成」
-        </span>
+        <span class="status stale-hint">内容已改动，重新生成可更新 PDF</span>
       </div>
       <div v-else class="progress">
         <div class="bar"><div class="fill" :style="{ width: percent + '%' }"></div></div>
         <span class="status">{{ statusText }}（{{ percent }}%）</span>
-        <a v-if="store.downloadUrl" class="download" :href="store.downloadUrl">⬇ PDF</a>
-        <a v-if="store.downloadPngUrl" class="download" :href="store.downloadPngUrl">⬇ PNG</a>
-        <span v-if="store.downloadUrl" class="dl-hint" title="服务器任务产物保留 24 小时，到期自动删除">
-          24h 内有效
-        </span>
+        <a v-if="store.downloadUrl" class="dl-btn" :href="store.downloadUrl"
+           title="服务器任务产物保留 24 小时，到期自动删除">⬇ PDF</a>
+        <a v-if="store.downloadPngUrl" class="dl-btn" :href="store.downloadPngUrl"
+           title="服务器任务产物保留 24 小时，到期自动删除">⬇ PNG</a>
       </div>
       <p v-if="store.jobError" class="error">
         {{ store.jobError }}

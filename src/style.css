@@ -85,9 +85,13 @@ body {
 .toolbar .sep { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }
 .toolbar .ai { background: var(--accent-soft); border-color: var(--accent-border); }
 .ai-warn { margin-top: 6px; font-size: 13px; color: #9a6b00; background: #fdf3dd; padding: 6px 10px; border-radius: 10px; }
-.backend-dot { font-size: 12px; padding: 2px 10px; border-radius: 9999px; }
-.backend-dot.ok { color: #147a3d; background: #e2f5ea; }
+.backend-dot { font-size: 12px; padding: 2px 10px; border-radius: 9999px; margin-left: auto; }
 .backend-dot.down { color: #a02222; background: #fdeaea; }
+/* 正常态只留一个小绿点（无事发生不打扰） */
+.backend-ok-dot {
+  width: 9px; height: 9px; border-radius: 50%; flex: none; margin-left: auto;
+  background: #2fb568; box-shadow: 0 0 0 3px rgba(47, 181, 104, 0.15);
+}
 
 .columns {
   flex: 1; display: grid; gap: 14px; padding: 14px;
@@ -180,7 +184,29 @@ body {
   background: rgba(255, 255, 255, 0.6); border-radius: 9999px; cursor: pointer;
 }
 .toolbar button:hover { border-color: var(--accent); color: var(--accent); }
-.cheatsheet { margin-left: auto; font-size: 13px; color: var(--muted); align-self: center; }
+.cheatsheet-wrap { position: relative; margin-left: auto; align-self: center; }
+.cheatsheet {
+  border: none; background: none; font-size: 13px; color: var(--muted);
+  cursor: pointer; padding: 4px 6px;
+}
+.cheatsheet:hover { color: var(--accent); }
+/* 记号速查浮层 */
+.cheat-pop {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 20;
+  width: 300px; padding: 10px 12px;
+  background: var(--panel-solid); border: 1px solid var(--line);
+  border-radius: 12px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+.cheat-row {
+  display: flex; justify-content: space-between; gap: 10px;
+  padding: 3px 0; font-size: 12.5px;
+}
+.cheat-row code {
+  color: var(--accent); background: var(--accent-soft);
+  padding: 1px 7px; border-radius: 6px; white-space: nowrap;
+}
+.cheat-row span { color: var(--muted); }
+.cheat-tip { margin-top: 7px; font-size: 11.5px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 7px; }
 .editor-body { display: flex; flex: 1; min-height: 300px; }
 /* 行号栏：行高必须与 textarea 的 15px×1.9 完全一致，否则会错位 */
 .gutter {
@@ -353,7 +379,13 @@ button.retry:hover { background: #fdeeee; }
 .progress .download {
   font-size: 13px; color: #147a3d; font-weight: 600; white-space: nowrap;
 }
-.dl-hint { font-size: 11px; color: var(--muted); white-space: nowrap; }
+/* 下载胶囊：完成态的 PDF/PNG 链接做成可点性明确的按钮 */
+.dl-btn {
+  padding: 5px 16px; font-size: 13px; font-weight: 600; white-space: nowrap;
+  border: 1px solid var(--accent-border); background: #fff;
+  color: var(--accent); border-radius: 9999px;
+}
+.dl-btn:hover { background: var(--accent-soft); }
 .stale-hint { color: #92400e; background: #fef3c7; border-radius: 8px; padding: 4px 8px; }
 
 /* 公告页 */

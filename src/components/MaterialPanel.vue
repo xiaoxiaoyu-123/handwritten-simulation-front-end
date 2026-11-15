@@ -280,16 +280,10 @@ function fmt(ts) {
           <button v-if="!f.builtin && renaming !== f.id" class="mini"
                   title="删除（点击名字可改名）" @click="deleteFont(f.id)">🗑</button>
         </div>
-        <label class="upload" :class="{ busy: uploading === 'fontImport' }">
-          <input type="file" accept=".ttf,.otf" hidden
-                 @change="uploadFont($event, 'fontImport')" ref="fontImport" />
-          {{ uploading === 'fontImport' ? '校验生成中…'
-                                       : '⬆ 导入 ttf/otf 文件（换设备迁移）' }}
-        </label>
       </template>
       <label class="upload" :class="{ busy: uploading === 'font' }">
         <input type="file" accept=".ttf,.otf" hidden @change="uploadFont" />
-        {{ uploading === 'font' ? '校验生成中…' : '+ 上传我的字体（.ttf/.otf）' }}
+        {{ uploading === 'font' ? '校验生成中…' : '＋ 上传字体' }}
       </label>
       <p class="hint">上传后会自动生成上标字形，支持指数记法</p>
     </div>

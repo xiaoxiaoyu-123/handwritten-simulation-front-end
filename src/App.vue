@@ -33,10 +33,8 @@ function useNewFont() {
         <button :class="{ on: view === 'forge' }" @click="view = 'forge'">字体工坊</button>
         <button :class="{ on: view === 'about' }" @click="view = 'about'">公告</button>
       </nav>
-      <span class="backend-dot" :class="backendOk ? 'ok' : 'down'">
-        {{ backendOk ? '后端已连接' : '后端未连接' }}
-      </span>
-      <span class="tagline">仅供个人学习演示使用</span>
+      <span v-if="backendOk" class="backend-ok-dot" title="后端已连接"></span>
+      <span v-else class="backend-dot down">后端未连接</span>
     </header>
 
     <ForgePanel v-if="view === 'forge'" @back="useNewFont" />

@@ -83,14 +83,11 @@ defineExpose({ runLint, byLine })
 </script>
 
 <template>
-  <div v-if="store.lint" class="lint" :class="{ ok: clean, bad: blockers.length }">
-    <!-- 干净 -->
-    <div v-if="clean && !skipLines.length" class="lint-summary ok-text">
-      ✅ 记号检查通过
-    </div>
-
+  <!-- 检查通过时不渲染（无事发生不占一行），只有问题/跳步时才出条 -->
+  <div v-if="store.lint && !(clean && !skipLines.length)" class="lint"
+       :class="{ bad: blockers.length }">
     <!-- 有问题 -->
-    <template v-else>
+    <template v-if="!clean || skipLines.length">
       <div class="lint-summary">
         <span v-if="fixable.length" class="warn-text">
           ⚠ {{ fixable.length }} 处可自动修复
