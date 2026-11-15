@@ -47,7 +47,7 @@ function useNewFont() {
       <PreviewPanel />
     </main>
 
-    <footer class="privacy">
+    <footer class="privacy" v-if="view === 'write'">
       本工具不保存你的题文（仅本机浏览器，可随时清空）；导出的 PDF/PNG 在服务器
       保留 24 小时后自动删除；AI 解题由本站提供（每人每天次数有限），题文会发送
       给 AI 服务商，请勿提交涉密或隐私内容；上传的纸张/字体仅本机可见，可随时删除。

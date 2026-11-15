@@ -95,14 +95,12 @@ const chaosLevels = [
   { id: 'messy', label: '潦草', hint: '赶时间' },
 ]
 
-// 字体分组：内置（可公开）/ 本机私有 / 我上传的
+// 字体分组：内置（含站点内置个性字体，均从后端拿）/ 我上传的
 const fontGroups = computed(() => {
-  const builtin = store.fonts.filter(f => f.builtin && !f.local)
-  const local = store.fonts.filter(f => f.local)
+  const builtin = store.fonts.filter(f => f.builtin)
   const mine = store.fonts.filter(f => !f.builtin)
   return [
     { title: '内置', items: builtin },
-    { title: '本机私有', items: local },
     { title: '我上传的', items: mine },
   ].filter(g => g.items.length)
 })
@@ -229,7 +227,6 @@ function fmt(ts) {
         <label>
           <input type="radio" name="paper" :value="p.id" v-model="store.paper" />
           {{ p.name }}
-          <span v-if="p.local" class="badge" title="来自本机手写模拟器，仅本机可见，不分发">本机</span>
         </label>
         <button v-if="!p.builtin" class="mini" title="删除" @click="deletePaper(p.id)">🗑</button>
       </div>
@@ -278,7 +275,6 @@ function fmt(ts) {
               <span class="fname" :title="!f.builtin ? '点击改名' : ''"
                     @click="!f.builtin && startRename(f)">{{ f.name }}</span>
             </template>
-            <span v-if="f.local" class="badge" title="来自本机手写模拟器，仅本机可见，不分发">本机</span>
             <span v-if="restoring === f.name" class="badge restoring">补传中…</span>
           </label>
           <button v-if="!f.builtin && renaming !== f.id" class="mini"
