@@ -159,7 +159,10 @@ export function loadSessions() {
       localStorage.removeItem('hs_history_v1')
     } catch { arr = [] }
   }
-  arr = arr.filter(s => s && typeof s.text === 'string' && s.preview)
+  // 只校验文本；preview 本就不落盘（persistNow 剥离），用默认对象补挂。
+  // （曾误要求 s.preview 导致切 tab 重挂载后历史全被清掉——旧版固有 bug）
+  arr = arr.filter(s => s && typeof s.text === 'string')
+           .map(s => ({ ...newSession(''), ...s }))
   store.sessions = arr.length ? arr : [newSession('')]
   store.activeId = store.sessions[0].id
 }

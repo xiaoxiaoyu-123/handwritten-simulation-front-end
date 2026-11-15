@@ -3,7 +3,16 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { cur, loadHistory, persistNow, store } from '../store'
 import { apiFetch } from '../api'
 
-onMounted(loadHistory)
+// 挂载 = 从字体工坊/公告切回来（或首启）。恢复持久化会话后，
+// 若当前会话有文本但预览还是空的（内存现场已丢），补一次渲染，
+// 免得每次切页回来都要手点 ⟳。
+onMounted(() => {
+  loadHistory()
+  const s = cur()
+  if (s && store.text.trim() && !s.preview.url) {
+    timer = setTimeout(preview, 300)
+  }
+})
 
 // 手动刷新按钮旁的"更新于 HH:MM:SS"（P0）——预览现场按会话各存一份
 const updatedAt = computed(() => store.previewUpdatedAt)
