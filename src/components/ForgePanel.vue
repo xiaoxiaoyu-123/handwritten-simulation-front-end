@@ -213,7 +213,7 @@ async function build() {
 .forge { max-width: 1100px; margin: 0 auto; }
 .guide {
   border: 1px dashed var(--accent); border-radius: 10px;
-  background: #f5f8ff; padding: 12px 14px; margin-top: 12px;
+  background: rgba(253, 242, 248, 0.85); padding: 12px 14px; margin-top: 12px;
 }
 .guide p { margin: 4px 0; font-size: 13.5px; line-height: 1.75; }
 .guide .hint { color: var(--muted); }

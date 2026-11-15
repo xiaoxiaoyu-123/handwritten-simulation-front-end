@@ -24,8 +24,10 @@ function useNewFont() {
 
 <template>
   <div class="layout">
+    <!-- 粉白主题背景：三个 blur 光斑（纯装饰，style.css 控制漂浮动画） -->
+    <div class="bg-decor" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i></div>
     <header class="topbar">
-      <span class="logo">✍️ 手写模拟</span>
+      <span class="logo">✍️ <b>手写模拟</b></span>
       <nav class="tabs">
         <button :class="{ on: view === 'write' }" @click="view = 'write'">写作业</button>
         <button :class="{ on: view === 'forge' }" @click="view = 'forge'">字体工坊</button>
