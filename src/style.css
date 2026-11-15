@@ -332,10 +332,22 @@ body {
 @keyframes spin { to { transform: rotate(360deg); } }
 .preview .page { position: relative; }
 .preview .page .overlay {
-  position: absolute; inset: 0; display: flex; align-items: center;
-  justify-content: center; background: rgba(255, 255, 255, 0.55);
-  font-size: 13px; color: var(--muted); border-radius: 10px;
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, 0.55);
+  font-size: 13px; color: var(--muted); border-radius: 8px;
 }
+/* 预览渲染等待：流动细条 + 已等待秒数 */
+.pv-bar {
+  display: block; width: 120px; height: 3px; border-radius: 9999px;
+  background: var(--line); overflow: hidden; margin: 8px auto 0;
+}
+.pv-bar i {
+  display: block; width: 40%; height: 100%; border-radius: 9999px;
+  background: var(--accent); animation: pv-flow 1.1s ease-in-out infinite;
+}
+@keyframes pv-flow { from { transform: translateX(-100%); } to { transform: translateX(350%); } }
+@media (prefers-reduced-motion: reduce) { .pv-bar i { animation: none; width: 100%; } }
 /* 多页翻页条 */
 .pager { display: flex; align-items: center; gap: 10px; }
 .pager .pagebtn {

@@ -61,6 +61,11 @@ watch(() => [store.text, store.paper, store.font, store.chaos,
 // 不取消的话请求会在服务端排队堆积，把单 worker 的 CPU 占满
 let abortCtl = null
 
+// 渲染等待反馈：单页渲染没有天然的百分比，给"已等待秒数 + 流动细条"
+// 比干巴巴的"渲染中…"更有活着的实感（导出任务那边才有真页码进度）
+const pvMs = ref(0)
+let pvTimer = null
+
 async function preview() {
   const s = cur()
   if (!s) return
@@ -69,6 +74,9 @@ async function preview() {
   abortCtl = ctl
   store.previewing = true
   s.preview.error = ''
+  pvMs.value = 0
+  clearInterval(pvTimer)
+  pvTimer = setInterval(() => { pvMs.value += 100 }, 100)
   try {
     const r = await apiFetch('/api/preview', {
       method: 'POST',
@@ -102,6 +110,8 @@ async function preview() {
     if (e?.name === 'AbortError' || abortCtl !== ctl) return
     s.preview.error = '无法连接后端'
   } finally {
+    clearInterval(pvTimer)
+    pvTimer = null
     if (abortCtl === ctl) store.previewing = false
   }
 }
@@ -224,8 +234,14 @@ const statusText = computed(() => {
       <img v-if="store.previewUrl" :src="store.previewUrl" alt="预览"
            class="clickable" title="点任意一行 → 编辑框跳到对应源文本行"
            @click="jumpToLine" />
-      <div v-if="store.previewing && store.previewUrl" class="overlay">渲染中…</div>
-      <p v-else-if="store.previewing" class="placeholder">渲染中…</p>
+      <div v-if="store.previewing && store.previewUrl" class="overlay">
+        <span>渲染中… {{ (pvMs / 1000).toFixed(1) }}s</span>
+        <span class="pv-bar"><i></i></span>
+      </div>
+      <div v-else-if="store.previewing" class="placeholder">
+        渲染中… {{ (pvMs / 1000).toFixed(1) }}s
+        <span class="pv-bar"><i></i></span>
+      </div>
       <p v-else-if="!store.previewUrl" class="placeholder">
         在左侧输入文本，这里会显示第一页手写效果
       </p>
