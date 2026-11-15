@@ -13,6 +13,9 @@ const lintBar = ref(null)
 let aiCtl = null            // 进行中 AI 请求的 AbortController（「停止」用）
 const lastPhoto = ref('')   // 最近一次拍题照片（失败重试用）
 const retryKind = ref('')   // 失败的 AI 调用类型（'solve'|'transcribe'）
+// 当前查看的会话是不是发起本次 AI 的那个——「正在解题…/停止」只在这
+// 个会话显示；别的会话按钮照样禁用（全局单飞）但不串显示（实测 bug）
+const myAi = computed(() => store.aiBusy && store.aiBusySid === cur()?.id)
 
 // 记号速查浮层（站内，替代外跳 GitHub；内容与上方插入按钮一一对应）
 const cheatOpen = ref(false)
@@ -112,6 +115,7 @@ async function callAi(path, body, s) {
   if (store.aiBusy) return null          // 单飞锁：解题期间再点拍题/解题直接忽略
   store.aiBusy = true
   store.aiKind = path.endsWith('/transcribe') ? 'transcribe' : 'solve'
+  store.aiBusySid = s.id
   s.aiError = ''
   aiCtl = new AbortController()
   startAiTimer()
@@ -142,6 +146,7 @@ async function callAi(path, body, s) {
     stopAiTimer()
     store.aiBusy = false
     store.aiKind = ''
+    store.aiBusySid = ''
     aiCtl = null
     persistNow()
   }
@@ -249,6 +254,7 @@ async function solve() {
   const snapshot = s.text         // 解答返回时对比：期间是否改过文本
   store.aiBusy = true
   store.aiKind = 'solve'
+  store.aiBusySid = s.id
   s.aiError = ''
   s.raw = ''
   s.tex = ''
@@ -312,6 +318,7 @@ async function solve() {
     stopAiTimer()
     store.aiBusy = false
     store.aiKind = ''
+    store.aiBusySid = ''
     aiCtl = null
     persistNow()
   }
@@ -443,6 +450,7 @@ async function startVisualImport() {
   const parts = []
   store.aiBusy = true
   store.aiKind = 'import'
+  store.aiBusySid = ''            // 扫描识别是全局流，不属于任何会话
   aiCtl = new AbortController()
   startAiTimer()
   try {
@@ -543,10 +551,12 @@ function cancelImport() {
         {{ m.label }}
       </button>
       <span class="sep"></span>
-      <button class="ai" title="拍题目照片，AI 抄成文字"
+      <button class="ai" :title="store.aiBusy && !myAi
+                ? '另一题目正在用 AI，完成后再试'
+                : '拍题目照片，AI 抄成文字'"
               :disabled="store.aiBusy || importing"
               @click="photoFile.click()">
-        {{ store.aiBusy && store.aiKind === 'transcribe'
+        {{ myAi && store.aiKind === 'transcribe'
           ? `正在抄题… ${aiElapsed}s` : '📷 拍题' }}
       </button>
       <input type="file" accept="image/png,image/jpeg,image/webp" hidden
@@ -557,12 +567,14 @@ function cancelImport() {
       </button>
       <input type="file" accept=".pdf,.docx" hidden
              ref="docFile" @change="importDoc" />
-      <button class="ai" title="AI 按本站记号规范写答案（务必自行核对）"
+      <button class="ai" :title="store.aiBusy && !myAi
+                ? '另一题目正在用 AI，完成后再试'
+                : 'AI 按本站记号规范写答案（务必自行核对）'"
               :disabled="store.aiBusy || importing" @click="solve">
-        {{ store.aiBusy && store.aiKind === 'solve'
+        {{ myAi && store.aiKind === 'solve'
           ? `正在解题… ${aiElapsed}s` : '🤖 AI 解题' }}
       </button>
-      <button v-if="store.aiBusy" class="stop" @click="stopAi"
+      <button v-if="myAi" class="stop" @click="stopAi"
               title="不再等待结果（AI 侧可能已消耗本次额度）">
         ✕ 停止
       </button>
@@ -577,7 +589,7 @@ function cancelImport() {
       </span>
     </div>
 
-    <p v-if="store.aiBusy" class="ai-hint">
+    <p v-if="myAi" class="ai-hint">
       解题中（约 30–90 秒）· 可随时切去左侧历史，回来继续看
     </p>
 

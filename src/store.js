@@ -53,6 +53,9 @@ export const store = reactive({
   // AI 单飞锁（全局：每 IP 配额按次计，解题/拍题/扫描识别互斥）
   aiBusy: false,
   aiKind: '',            // 'transcribe' | 'solve' | 'import'
+  aiBusySid: '',         // 发起本次 AI 的会话 id；'' = 全局流（扫描识别）。
+                         // 「正在解题… Ns / 停止」只在该会话的工具条显示，
+                         // 别的会话只看到按钮禁用——否则会串台（实测 bug）
 
   // ---- 旧字段 → 当前会话 的读写代理 ----
   // 组件照常用 store.text / store.lint / store.aiRaw…，模板自动跟随
